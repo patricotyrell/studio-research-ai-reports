@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { 
   Upload, Database, FileText, BarChart2, 
   FileUp, LayoutDashboard, Settings, LogOut,
-  Menu, X
+  Menu, X, ChartBar, FileBarChart
 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
@@ -131,10 +131,11 @@ const SidebarItems: React.FC<SidebarItemsProps> = ({ isActive, setSidebarOpen })
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { path: '/upload', label: 'Upload Data', icon: <Upload size={18} /> },
-    { path: '/sample-data', label: 'Sample Data', icon: <Database size={18} /> },
     { path: '/data-overview', label: 'Data Overview', icon: <FileText size={18} /> },
     { path: '/data-preparation', label: 'Data Preparation', icon: <FileUp size={18} /> },
     { path: '/analysis', label: 'Analysis', icon: <BarChart2 size={18} /> },
+    { path: '/visualization', label: 'Visualization', icon: <ChartBar size={18} /> },
+    { path: '/report', label: 'Report', icon: <FileBarChart size={18} /> },
     { path: '/settings', label: 'Settings', icon: <Settings size={18} /> },
   ];
 

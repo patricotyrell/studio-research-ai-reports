@@ -10,6 +10,9 @@ import Dashboard from "./pages/Dashboard";
 import UploadData from "./pages/UploadData";
 import DataOverview from "./pages/DataOverview";
 import DataPreparation from "./pages/DataPreparation";
+import Analysis from "./pages/Analysis";
+import Visualization from "./pages/Visualization";
+import Report from "./pages/Report";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +30,9 @@ const App = () => (
           <Route path="/upload" element={<UploadData />} />
           <Route path="/data-overview" element={<DataOverview />} />
           <Route path="/data-preparation" element={<DataPreparation />} />
+          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/visualization" element={<Visualization />} />
+          <Route path="/report" element={<Report />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
