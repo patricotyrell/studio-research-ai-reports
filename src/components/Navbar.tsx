@@ -1,9 +1,12 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
+  const navigate = useNavigate();
+  const user = localStorage.getItem('user');
+  
   return (
     <header className="w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40">
       <div className="container-custom flex h-16 items-center justify-between">
@@ -36,8 +39,30 @@ const Navbar = () => {
           <Link to="/pricing" className="text-sm font-medium text-gray-700 hover:text-research-700 transition-colors">Pricing</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" className="text-sm font-medium text-gray-700">Sign In</Button>
-          <Button className="bg-research-700 hover:bg-research-800 text-white">Get Started</Button>
+          {user ? (
+            <Button 
+              className="bg-research-700 hover:bg-research-800 text-white"
+              onClick={() => navigate('/dashboard')}
+            >
+              Dashboard
+            </Button>
+          ) : (
+            <>
+              <Button 
+                variant="ghost" 
+                className="text-sm font-medium text-gray-700"
+                onClick={() => navigate('/auth')}
+              >
+                Sign In
+              </Button>
+              <Button 
+                className="bg-research-700 hover:bg-research-800 text-white"
+                onClick={() => navigate('/auth')}
+              >
+                Get Started
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
