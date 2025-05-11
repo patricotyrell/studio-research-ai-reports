@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,19 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				research: {
+					50: '#f0f7ff',
+					100: '#daecff',
+					200: '#bcdcff',
+					300: '#8ac6ff',
+					400: '#51a8ff',
+					500: '#2988ff',
+					600: '#0e68ff',
+					700: '#0753ec',
+					800: '#0c44c0',
+					900: '#113a97',
+					950: '#0f2457'
 				}
 			},
 			borderRadius: {
@@ -84,11 +98,25 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'fade-in': {
+					'0%': { opacity: '0', transform: 'translateY(10px)' },
+					'100%': { opacity: '1', transform: 'translateY(0)' }
+				},
+				'fade-out': {
+					'0%': { opacity: '1', transform: 'translateY(0)' },
+					'100%': { opacity: '0', transform: 'translateY(10px)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'fade-in': 'fade-in 0.5s ease-out',
+				'fade-out': 'fade-out 0.5s ease-out'
+			},
+			fontFamily: {
+				serif: ['Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
+				sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
 			}
 		}
 	},
