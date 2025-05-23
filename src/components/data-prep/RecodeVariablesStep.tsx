@@ -286,7 +286,6 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {variables.map((variable, varIndex) => (
