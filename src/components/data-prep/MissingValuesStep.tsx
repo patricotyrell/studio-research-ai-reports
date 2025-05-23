@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +12,7 @@ import { getDatasetVariables } from '@/utils/dataUtils';
 interface MissingValuesStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
+  onBack?: () => void;
 }
 
 interface VariableWithMissing {
@@ -24,7 +24,7 @@ interface VariableWithMissing {
   missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore';
 }
 
-const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNext }) => {
+const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNext, onBack }) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
