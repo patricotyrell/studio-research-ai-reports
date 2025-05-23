@@ -12,7 +12,9 @@ import { getDatasetVariables } from '@/utils/dataUtils';
 interface MissingValuesStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
-  onBack?: () => void;
+  onBack: () => void;
+  onSkipToSummary: () => void;
+  showBackButton?: boolean;
 }
 
 interface VariableWithMissing {
@@ -24,7 +26,13 @@ interface VariableWithMissing {
   missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore';
 }
 
-const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNext, onBack }) => {
+const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  onSkipToSummary, 
+  showBackButton = true 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -117,6 +125,7 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNex
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<AlertCircle className="h-6 w-6 text-amber-500" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -127,7 +136,10 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNex
         title="Missing Values Handled"
         description="AI has automatically handled missing values based on best practices."
         onComplete={handleComplete}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -188,7 +200,10 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({ onComplete, onNex
         description="Select how to handle missing values for each variable."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>

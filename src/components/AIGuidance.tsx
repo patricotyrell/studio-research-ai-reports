@@ -1,74 +1,90 @@
 
 import React from 'react';
-import { AlertCircle, BrainCircuit, Check, X } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Wand2, Settings, SkipForward } from 'lucide-react';
 
 interface AIGuidanceProps {
   title: string;
   description: string;
+  automaticDescription: string;
+  manualDescription: string;
   onAutomatic: () => void;
   onManual: () => void;
-  automaticDescription?: string;
-  manualDescription?: string;
   actionInProgress?: boolean;
   icon?: React.ReactNode;
+  onSkipToSummary?: () => void;
 }
 
 const AIGuidance: React.FC<AIGuidanceProps> = ({
   title,
   description,
+  automaticDescription,
+  manualDescription,
   onAutomatic,
   onManual,
-  automaticDescription = "Handle automatically using AI recommendations",
-  manualDescription = "Review and select options manually",
   actionInProgress = false,
-  icon = <BrainCircuit className="h-6 w-6 text-indigo-600" />
+  icon,
+  onSkipToSummary
 }) => {
   return (
-    <Card className="mb-6 border-2 border-indigo-100">
-      <CardHeader className="flex flex-row items-center gap-4 pb-2">
-        {icon}
-        <div>
-          <CardTitle className="text-lg font-semibold text-indigo-700">{title}</CardTitle>
+    <Card className="mb-6">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div className="flex items-start gap-4">
+          {icon && <div className="mt-1">{icon}</div>}
+          <div>
+            <CardTitle className="text-xl mb-2">{title}</CardTitle>
+            <CardDescription className="text-base">{description}</CardDescription>
+          </div>
         </div>
+        {onSkipToSummary && (
+          <Button 
+            variant="outline" 
+            onClick={onSkipToSummary}
+            disabled={actionInProgress}
+            className="flex items-center gap-1"
+          >
+            <SkipForward className="h-4 w-4" />
+            Skip to Summary
+          </Button>
+        )}
       </CardHeader>
+      
       <CardContent>
-        <p className="text-gray-600 mb-4">{description}</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="border border-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer">
-            <CardContent className="pt-6 flex flex-col items-center text-center">
-              <BrainCircuit className="h-10 w-10 text-indigo-500 mb-3" />
-              <h3 className="font-medium mb-2">AI Automatic</h3>
-              <p className="text-sm text-gray-500">{automaticDescription}</p>
-            </CardContent>
-            <CardFooter className="flex justify-center pb-4">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card className="border-blue-200 bg-blue-50/30 hover:bg-blue-50/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Wand2 className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-blue-900">AI Recommended</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">{automaticDescription}</p>
               <Button 
-                variant="default" 
-                className="bg-indigo-600 hover:bg-indigo-700" 
                 onClick={onAutomatic}
                 disabled={actionInProgress}
+                className="w-full bg-blue-600 hover:bg-blue-700"
               >
-                Use AI Recommendation
+                {actionInProgress ? 'Processing...' : 'Apply AI Recommendations'}
               </Button>
-            </CardFooter>
+            </CardContent>
           </Card>
           
-          <Card className="border border-gray-200 hover:border-gray-300 transition-colors cursor-pointer">
-            <CardContent className="pt-6 flex flex-col items-center text-center">
-              <AlertCircle className="h-10 w-10 text-gray-500 mb-3" />
-              <h3 className="font-medium mb-2">Manual Review</h3>
-              <p className="text-sm text-gray-500">{manualDescription}</p>
-            </CardContent>
-            <CardFooter className="flex justify-center pb-4">
+          <Card className="border-gray-200 bg-gray-50/30 hover:bg-gray-50/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Settings className="h-5 w-5 text-gray-600" />
+                <h3 className="font-semibold text-gray-900">Manual Review</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">{manualDescription}</p>
               <Button 
                 variant="outline" 
                 onClick={onManual}
                 disabled={actionInProgress}
+                className="w-full"
               >
-                Review Options Manually
+                Review Manually
               </Button>
-            </CardFooter>
+            </CardContent>
           </Card>
         </div>
       </CardContent>

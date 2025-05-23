@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -52,71 +53,80 @@ const DataPreparation = () => {
   const handleBack = () => {
     setCurrentStep(prev => Math.max(1, prev - 1));
   };
+
+  const handleSkipToSummary = () => {
+    setCurrentStep(7);
+  };
   
   const handleFinish = () => {
     setLoading(true);
     
     setTimeout(() => {
       setLoading(false);
-      navigate('/visualization'); // Changed from '/analysis' to '/visualization'
+      navigate('/visualization');
     }, 1000);
   };
   
   const renderCurrentStep = () => {
+    const commonProps = {
+      onComplete: (autoApplied: boolean) => {
+        const stepNames = ['missingValues', 'recodeVariables', 'compositeScores', 'standardizeVariables', 'removeColumns', 'fixDuplicates'];
+        handleStepComplete(stepNames[currentStep - 1], autoApplied);
+      },
+      onNext: handleNext,
+      onBack: handleBack,
+      onSkipToSummary: handleSkipToSummary
+    };
+
     switch (currentStep) {
       case 1:
         return (
           <MissingValuesStep 
-            onComplete={(autoApplied) => handleStepComplete('missingValues', autoApplied)} 
-            onNext={handleNext}
-            onBack={() => null} // First step has no back
+            {...commonProps}
+            showBackButton={false} // First step shouldn't have back button
           />
         );
       case 2:
         return (
           <RecodeVariablesStep 
-            onComplete={(autoApplied) => handleStepComplete('recodeVariables', autoApplied)} 
-            onNext={handleNext} 
-            onBack={handleBack}
+            {...commonProps}
+            showBackButton={true}
           />
         );
       case 3:
         return (
           <CompositeScoresStep 
-            onComplete={(autoApplied) => handleStepComplete('compositeScores', autoApplied)} 
-            onNext={handleNext} 
-            onBack={handleBack}
+            {...commonProps}
+            showBackButton={true}
           />
         );
       case 4:
         return (
           <StandardizeVariablesStep 
-            onComplete={(autoApplied) => handleStepComplete('standardizeVariables', autoApplied)} 
-            onNext={handleNext} 
-            onBack={handleBack}
+            {...commonProps}
+            showBackButton={true}
           />
         );
       case 5:
         return (
           <RemoveColumnsStep 
-            onComplete={(autoApplied) => handleStepComplete('removeColumns', autoApplied)} 
-            onNext={handleNext} 
-            onBack={handleBack}
+            {...commonProps}
+            showBackButton={true}
           />
         );
       case 6:
         return (
           <DuplicatesStep 
-            onComplete={(autoApplied) => handleStepComplete('fixDuplicates', autoApplied)} 
-            onNext={handleNext} 
-            onBack={handleBack}
+            {...commonProps}
+            showBackButton={true}
           />
         );
       case 7:
         return (
           <DataPrepSummary 
             completedSteps={completedSteps} 
-            onContinue={handleFinish} 
+            onContinue={handleFinish}
+            onBack={handleBack}
           />
         );
       default:
@@ -143,7 +153,7 @@ const DataPreparation = () => {
             {currentStep < 7 && (
               <Button 
                 variant="outline"
-                onClick={() => setCurrentStep(7)}
+                onClick={handleSkipToSummary}
               >
                 Skip to Summary
               </Button>

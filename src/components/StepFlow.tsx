@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, SkipForward } from 'lucide-react';
 
 interface StepFlowProps {
   title: string;
@@ -14,6 +14,7 @@ interface StepFlowProps {
   onBack?: () => void;
   actionInProgress?: boolean;
   completeButtonText?: string;
+  onSkipToSummary?: () => void;
 }
 
 const StepFlow: React.FC<StepFlowProps> = ({
@@ -25,19 +26,33 @@ const StepFlow: React.FC<StepFlowProps> = ({
   showBackButton = false,
   onBack,
   actionInProgress = false,
-  completeButtonText = "Apply Changes"
+  completeButtonText = "Apply Changes",
+  onSkipToSummary
 }) => {
   return (
     <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-lg">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        {onSkipToSummary && (
+          <Button 
+            variant="outline" 
+            onClick={onSkipToSummary}
+            disabled={actionInProgress}
+            className="flex items-center gap-1"
+          >
+            <SkipForward className="h-4 w-4" />
+            Skip to Summary
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {children}
       </CardContent>
       <CardFooter className="flex justify-between">
-        <div>
+        <div className="flex gap-2">
           {onCancel && (
             <Button variant="ghost" onClick={onCancel} disabled={actionInProgress}>
               Cancel
