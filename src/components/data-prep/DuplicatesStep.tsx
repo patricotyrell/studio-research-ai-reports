@@ -13,6 +13,8 @@ interface DuplicatesStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  showBackButton?: boolean;
+  onSkipToSummary?: () => void;
 }
 
 interface DuplicateGroup {
@@ -30,7 +32,13 @@ interface InconsistentValue {
   selected: boolean;
 }
 
-const DuplicatesStep: React.FC<DuplicatesStepProps> = ({ onComplete, onNext, onBack }) => {
+const DuplicatesStep: React.FC<DuplicatesStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  showBackButton = true,
+  onSkipToSummary 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -155,6 +163,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({ onComplete, onNext, onB
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<CopyX className="h-6 w-6 text-red-500" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -169,8 +178,9 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({ onComplete, onNext, onB
         description="AI has cleaned up duplicates and inconsistencies in your dataset."
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
-        showBackButton={true}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -260,9 +270,10 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({ onComplete, onNext, onB
         description="Review and fix data quality issues in your dataset."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
-        onBack={onBack}
-        showBackButton={true}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         {duplicateGroups.length > 0 && (
           <div className="mb-8">
