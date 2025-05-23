@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -7,11 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import StepIndicator from '@/components/StepIndicator';
+import DataPreview from '@/components/DataPreview';
 import { FileText, AlertCircle, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from "@/components/ui/progress";
+import { getDatasetVariables, getCurrentFile } from '@/utils/dataUtils';
 
-// Sample data structure
 interface Column {
   name: string;
   type: 'text' | 'categorical' | 'numeric' | 'date';
@@ -20,18 +20,9 @@ interface Column {
   example: string;
 }
 
-interface FileInfo {
-  name: string;
-  size: number;
-  type: string;
-  dateUploaded: string;
-  rows: number;
-  columns: number;
-}
-
 const DataOverview = () => {
   const navigate = useNavigate();
-  const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
+  const [fileInfo, setFileInfo] = useState<any | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
   
   // Check if user is logged in and has a current file
@@ -42,17 +33,23 @@ const DataOverview = () => {
       return;
     }
     
-    const currentFile = localStorage.getItem('currentFile');
+    const currentFile = getCurrentFile();
     if (!currentFile) {
       navigate('/upload');
       return;
     }
     
-    setFileInfo(JSON.parse(currentFile));
+    setFileInfo(currentFile);
     
-    // In a real app, we would retrieve the actual data from the server
-    // For this demo, we'll generate synthetic column data
-    generateSyntheticColumns();
+    // Get variables from sample data or user uploaded file
+    const variables = getDatasetVariables();
+    if (variables.length > 0) {
+      setColumns(variables);
+    } else {
+      // For user-uploaded files without sample data,
+      // generate synthetic column data for demonstration
+      generateSyntheticColumns();
+    }
   }, [navigate]);
   
   const generateSyntheticColumns = () => {
@@ -119,7 +116,7 @@ const DataOverview = () => {
             </div>
             <Button 
               className="bg-research-700 hover:bg-research-800"
-              onClick={handleContinue}
+              onClick={() => navigate('/data-preparation')}
             >
               Continue to Data Preparation
             </Button>
@@ -166,7 +163,10 @@ const DataOverview = () => {
             </CardContent>
           </Card>
           
-          {/* Data preview */}
+          {/* Data Preview - New Component */}
+          <DataPreview maxRows={5} />
+          
+          {/* Variable Summary */}
           <Card className="mb-6">
             <CardHeader className="py-4 px-6">
               <div className="flex justify-between items-center">
@@ -208,7 +208,12 @@ const DataOverview = () => {
                       <TableRow key={column.name}>
                         <TableCell className="font-medium">{column.name}</TableCell>
                         <TableCell>
-                          <Badge className={getTypeColor(column.type)}>
+                          <Badge className={
+                            column.type === 'text' ? "bg-blue-100 text-blue-800" :
+                            column.type === 'categorical' ? "bg-purple-100 text-purple-800" :
+                            column.type === 'numeric' ? "bg-green-100 text-green-800" :
+                            "bg-orange-100 text-orange-800"
+                          }>
                             {column.type.charAt(0).toUpperCase() + column.type.slice(1)}
                           </Badge>
                         </TableCell>
