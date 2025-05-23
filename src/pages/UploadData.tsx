@@ -2,18 +2,22 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import StepIndicator from '@/components/StepIndicator';
+import { processCSVData, saveProject } from '@/utils/dataUtils';
 
 const UploadData = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [processedData, setProcessedData] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -53,7 +57,7 @@ const UploadData = () => {
     }
   };
 
-  const processFile = (uploadedFile: File) => {
+  const processFile = async (uploadedFile: File) => {
     setError(null);
     
     // Check file type
@@ -66,40 +70,61 @@ const UploadData = () => {
     }
     
     setFile(uploadedFile);
-    
-    // In a real app, we would parse and validate the file here
-    // For this demo, we'll just simulate the process
-    
-    toast({
-      title: "File received",
-      description: `${uploadedFile.name} has been uploaded.`,
-    });
-  };
-
-  const handleContinue = () => {
-    if (!file) {
-      setError('Please upload a file first.');
-      return;
-    }
-
     setLoading(true);
     
-    // Simulate file processing
-    setTimeout(() => {
-      // Store file information in localStorage for demo purposes
-      // In a real app, this would be uploaded and processed on a server
-      localStorage.setItem('currentFile', JSON.stringify({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        dateUploaded: new Date().toISOString(),
-        rows: 150,
-        columns: 12
-      }));
+    try {
+      // Process CSV data
+      const data = await processCSVData(uploadedFile);
+      setProcessedData(data);
+      
+      // Store processed data temporarily
+      localStorage.setItem('processedData', JSON.stringify(data));
+      
+      toast({
+        title: "File processed successfully",
+        description: `Found ${data.variables.length} variables and ${data.totalRows} rows.`,
+      });
       
       setLoading(false);
-      navigate('/data-overview');
-    }, 1500);
+      setShowProjectDialog(true);
+    } catch (error: any) {
+      setError(error.message || 'Failed to process file');
+      setLoading(false);
+    }
+  };
+
+  const handleProjectName = (projectName: string) => {
+    if (!file || !processedData) return;
+    
+    // Create project information
+    const projectInfo = {
+      id: Date.now().toString(),
+      name: projectName,
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString()
+    };
+    
+    // Store file information
+    const fileInfo = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      dateUploaded: new Date().toISOString(),
+      rows: processedData.totalRows,
+      columns: processedData.variables.length
+    };
+    
+    // Save to localStorage
+    saveProject(projectInfo);
+    localStorage.setItem('currentFile', JSON.stringify(fileInfo));
+    localStorage.setItem('isSampleData', 'false');
+    
+    // Clear any previous prep steps
+    localStorage.removeItem('completedPrepSteps');
+    localStorage.removeItem('preparedVariables');
+    
+    setShowProjectDialog(false);
+    navigate('/data-overview');
   };
 
   return (
@@ -159,20 +184,12 @@ const UploadData = () => {
               
               <div className="flex justify-center mt-6">
                 <Button 
-                  className="bg-research-700 hover:bg-research-800 mr-2"
+                  className="bg-research-700 hover:bg-research-800"
                   onClick={() => document.getElementById('file-upload')?.click()}
+                  disabled={loading}
                 >
-                  Browse Files
+                  {loading ? 'Processing...' : 'Browse Files'}
                 </Button>
-                {file && (
-                  <Button 
-                    className="bg-research-700 hover:bg-research-800"
-                    onClick={handleContinue}
-                    disabled={loading}
-                  >
-                    {loading ? 'Processing...' : 'Continue'}
-                  </Button>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -193,6 +210,14 @@ const UploadData = () => {
             </p>
           </div>
         </div>
+        
+        <ProjectNameDialog
+          open={showProjectDialog}
+          onConfirm={handleProjectName}
+          defaultName={file ? file.name.replace(/\.[^/.]+$/, "") : ""}
+          title="Name Your Project"
+          description="Give your research project a descriptive name to help you identify it later."
+        />
       </div>
     </DashboardLayout>
   );

@@ -1,13 +1,16 @@
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { FileText, Upload, Database } from 'lucide-react';
+import ProjectNameDialog from '@/components/ProjectNameDialog';
+import { FileText, Upload, Database, Edit } from 'lucide-react';
+import { getCurrentProject, updateProjectName, getCurrentFile } from '@/utils/dataUtils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [currentProject, setCurrentProject] = useState<any>(null);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
   
   // Check if user is logged in
   useEffect(() => {
@@ -15,10 +18,28 @@ const Dashboard = () => {
     if (!user) {
       navigate('/auth');
     }
+    
+    // Load current project
+    const project = getCurrentProject();
+    setCurrentProject(project);
   }, [navigate]);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isDemo = user.role === 'demo';
+  const currentFile = getCurrentFile();
+  
+  const handleRenameProject = (newName: string) => {
+    updateProjectName(newName);
+    const updatedProject = getCurrentProject();
+    setCurrentProject(updatedProject);
+    setShowRenameDialog(false);
+  };
+  
+  const handleContinueProject = () => {
+    if (currentProject && currentFile) {
+      navigate('/data-overview');
+    }
+  };
   
   return (
     <DashboardLayout>
@@ -30,6 +51,49 @@ const Dashboard = () => {
             : "Start a new project or continue working on an existing one."
           }
         </p>
+        
+        {/* Current Project Section */}
+        {currentProject && (
+          <Card className="mb-6 bg-research-50 border-research-200">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <FileText className="h-6 w-6 mr-2 text-research-700" />
+                  Current Project: {currentProject.name}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowRenameDialog(true)}
+                  className="text-research-700 hover:text-research-800"
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Rename
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 mb-2">
+                    Created: {new Date(currentProject.createdAt).toLocaleDateString()}
+                  </p>
+                  {currentFile && (
+                    <p className="text-sm text-gray-500">
+                      {currentFile.rows} rows, {currentFile.columns} columns
+                    </p>
+                  )}
+                </div>
+                <Button 
+                  className="bg-research-700 hover:bg-research-800"
+                  onClick={handleContinueProject}
+                >
+                  Continue Project
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card className="hover:shadow-md transition-shadow">
@@ -111,6 +175,14 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+      
+      <ProjectNameDialog
+        open={showRenameDialog}
+        onConfirm={handleRenameProject}
+        defaultName={currentProject?.name || ''}
+        title="Rename Project"
+        description="Enter a new name for your project."
+      />
     </DashboardLayout>
   );
 };

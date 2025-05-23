@@ -14,6 +14,28 @@ export const getCurrentFile = () => {
   return JSON.parse(fileData);
 };
 
+// Get current project information
+export const getCurrentProject = () => {
+  const projectData = localStorage.getItem('currentProject');
+  if (!projectData) return null;
+  
+  return JSON.parse(projectData);
+};
+
+// Save project information
+export const saveProject = (projectInfo: any) => {
+  localStorage.setItem('currentProject', JSON.stringify(projectInfo));
+};
+
+// Update project name
+export const updateProjectName = (newName: string) => {
+  const project = getCurrentProject();
+  if (project) {
+    project.name = newName;
+    saveProject(project);
+  }
+};
+
 // Save preparation step completion status
 export const saveStepCompletion = (step: string, completed: boolean) => {
   const currentSteps = getCompletedSteps();
@@ -38,6 +60,82 @@ export const getCompletedSteps = () => {
   return JSON.parse(stepsData);
 };
 
+// Process CSV data to extract variables and preview rows
+export const processCSVData = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        if (lines.length < 2) {
+          reject(new Error('File must contain at least a header row and one data row'));
+          return;
+        }
+        
+        // Parse header
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        
+        // Parse data rows
+        const dataRows = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || null;
+          });
+          return row;
+        });
+        
+        // Analyze variables
+        const variables: DataVariable[] = headers.map(header => {
+          const values = dataRows.map(row => row[header]).filter(v => v !== null && v !== '');
+          const uniqueValues = [...new Set(values)];
+          const missingCount = dataRows.length - values.length;
+          
+          // Determine variable type
+          let type: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
+          
+          // Check if numeric
+          const numericValues = values.filter(v => !isNaN(Number(v)) && v !== '');
+          if (numericValues.length === values.length && values.length > 0) {
+            type = 'numeric';
+          } else if (uniqueValues.length <= 10 && values.length > uniqueValues.length * 2) {
+            // If unique values are few and repeated, likely categorical
+            type = 'categorical';
+          } else if (values.some(v => /^\d{4}-\d{2}-\d{2}/.test(v))) {
+            // Basic date pattern check
+            type = 'date';
+          }
+          
+          return {
+            name: header,
+            type,
+            missing: missingCount,
+            unique: uniqueValues.length,
+            example: values[0] || 'N/A'
+          };
+        });
+        
+        // Get preview rows (first 5)
+        const previewRows = dataRows.slice(0, 5);
+        
+        resolve({
+          variables,
+          previewRows,
+          totalRows: dataRows.length
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
 // Get variables for the current dataset (real or sample)
 export const getDatasetVariables = () => {
   const fileInfo = getCurrentFile();
@@ -48,8 +146,13 @@ export const getDatasetVariables = () => {
     return sampleData?.variables || [];
   }
   
-  // In a real app, we would retrieve variables from the server
-  // For now, return empty array if not sample data
+  // For real uploaded files, get from processed data
+  const processedData = localStorage.getItem('processedData');
+  if (processedData) {
+    const data = JSON.parse(processedData);
+    return data.variables || [];
+  }
+  
   return [];
 };
 
@@ -63,7 +166,13 @@ export const getDatasetPreviewRows = () => {
     return sampleData?.previewRows || [];
   }
   
-  // In a real app, we would retrieve preview from the server
+  // For real uploaded files, get from processed data
+  const processedData = localStorage.getItem('processedData');
+  if (processedData) {
+    const data = JSON.parse(processedData);
+    return data.previewRows || [];
+  }
+  
   return [];
 };
 

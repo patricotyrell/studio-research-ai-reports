@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -7,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import StepIndicator from '@/components/StepIndicator';
 import DataPreview from '@/components/DataPreview';
-import { FileText, AlertCircle, Info } from 'lucide-react';
+import { FileText, AlertCircle, Info, FolderOpen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from "@/components/ui/progress";
-import { getDatasetVariables, getCurrentFile } from '@/utils/dataUtils';
+import { getDatasetVariables, getCurrentFile, getCurrentProject } from '@/utils/dataUtils';
 
 interface Column {
   name: string;
@@ -23,6 +24,7 @@ interface Column {
 const DataOverview = () => {
   const navigate = useNavigate();
   const [fileInfo, setFileInfo] = useState<any | null>(null);
+  const [projectInfo, setProjectInfo] = useState<any | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
   
   // Check if user is logged in and has a current file
@@ -34,12 +36,15 @@ const DataOverview = () => {
     }
     
     const currentFile = getCurrentFile();
+    const currentProject = getCurrentProject();
+    
     if (!currentFile) {
       navigate('/upload');
       return;
     }
     
     setFileInfo(currentFile);
+    setProjectInfo(currentProject);
     
     // Get variables from sample data or user uploaded file
     const variables = getDatasetVariables();
@@ -109,6 +114,12 @@ const DataOverview = () => {
         <div className="max-w-6xl mx-auto mt-6">
           <div className="flex items-start justify-between mb-6">
             <div>
+              {projectInfo && (
+                <div className="flex items-center mb-2">
+                  <FolderOpen className="h-5 w-5 mr-2 text-research-700" />
+                  <span className="text-lg font-medium text-research-700">{projectInfo.name}</span>
+                </div>
+              )}
               <h1 className="text-3xl font-bold text-research-900 mb-2">Data Overview</h1>
               <p className="text-gray-600">
                 Review your dataset to understand its structure and content before proceeding to analysis.
