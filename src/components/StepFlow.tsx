@@ -44,8 +44,8 @@ const StepFlow: React.FC<StepFlowProps> = ({
             </Button>
           )}
           {showBackButton && onBack && (
-            <Button variant="outline" onClick={onBack} disabled={actionInProgress} className="ml-2">
-              <ArrowLeft className="mr-1 h-4 w-4" />
+            <Button variant="outline" onClick={onBack} disabled={actionInProgress} className="flex items-center gap-1">
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
           )}
@@ -53,10 +53,19 @@ const StepFlow: React.FC<StepFlowProps> = ({
         <Button 
           onClick={onComplete} 
           disabled={actionInProgress}
-          className="bg-research-700 hover:bg-research-800"
+          className="bg-research-700 hover:bg-research-800 flex items-center gap-1"
         >
-          <Check className="mr-1 h-4 w-4" />
-          {completeButtonText}
+          {completeButtonText.includes("Continue") ? (
+            <>
+              {completeButtonText}
+              <ArrowRight className="h-4 w-4" />
+            </>
+          ) : (
+            <>
+              <Check className="h-4 w-4" />
+              {completeButtonText}
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>

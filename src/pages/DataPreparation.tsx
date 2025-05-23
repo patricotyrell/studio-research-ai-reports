@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -47,7 +46,7 @@ const DataPreparation = () => {
   };
   
   const handleNext = () => {
-    setCurrentStep(prev => prev + 1);
+    setCurrentStep(prev => Math.min(7, prev + 1));
   };
   
   const handleBack = () => {
@@ -69,7 +68,8 @@ const DataPreparation = () => {
         return (
           <MissingValuesStep 
             onComplete={(autoApplied) => handleStepComplete('missingValues', autoApplied)} 
-            onNext={handleNext} 
+            onNext={handleNext}
+            onBack={() => null} // First step has no back
           />
         );
       case 2:

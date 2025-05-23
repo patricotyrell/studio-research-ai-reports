@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus, Check, AlertTriangle, Info } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Info, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
@@ -176,6 +175,12 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
     onNext();
   };
   
+  const handleBackToGuidance = () => {
+    setShowGuidance(true);
+    setShowManualOptions(false);
+    setCompletedAutomatic(false);
+  };
+  
   // If there are no categorical variables, show a message and allow skipping
   if (variables.length === 0) {
     return (
@@ -218,7 +223,7 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
         title="Variables Recoded"
         description="AI has automatically recoded categorical variables to standardize categories."
         onComplete={handleComplete}
-        onBack={() => setShowGuidance(true)}
+        onBack={handleBackToGuidance}
         showBackButton={true}
         completeButtonText="Continue to Next Step"
       >
@@ -334,6 +339,25 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
               </Button>
             </div>
           ))}
+        </div>
+        
+        <div className="flex justify-between mt-6">
+          <Button 
+            variant="outline" 
+            onClick={onBack}
+            className="flex items-center gap-1"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          
+          <Button 
+            className="bg-research-700 hover:bg-research-800 flex items-center gap-1"
+            onClick={handleComplete}
+          >
+            Continue
+            <ArrowRight className="h-4 w-4" />
+          </Button>
         </div>
       </StepFlow>
     );
