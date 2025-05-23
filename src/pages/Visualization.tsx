@@ -10,19 +10,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Brush } from 'recharts';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Download, Copy, PlusCircle, BarChart as BarChartIcon, PieChart as PieChartIcon, LineChart as LineChartIcon, ScatterChart as ScatterChartIcon, LayoutGrid } from 'lucide-react';
+import { AlertCircle, Download, Copy, PlusCircle, BarChart as BarChartIcon, PieChart as PieChartIcon, LineChart as LineChartIcon, ScatterChart as ScatterChartIcon, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import StepIndicator from '@/components/StepIndicator';
 import { getDatasetVariables } from '@/utils/dataUtils';
-import { generateChartInsights } from '@/utils/visualizationUtils';
+import { 
+  generateChartInsights, 
+  calculateFrequencyDistribution, 
+  generateCrosstabData, 
+  generateFrequencyTableInsights,
+  generateCrosstabInsights
+} from '@/utils/visualizationUtils';
 import { DataVariable } from '@/services/sampleDataService';
+import FrequencyTable from '@/components/visualization/FrequencyTable';
+import CrosstabTable from '@/components/visualization/CrosstabTable';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
+type VisualizationType = 'chart' | 'table';
 
 interface ChartConfig {
   type: ChartType;
@@ -47,6 +56,9 @@ const Visualization = () => {
   const [variables, setVariables] = useState<DataVariable[]>([]);
   const [insights, setInsights] = useState<string>('');
   const [hasGeneratedChart, setHasGeneratedChart] = useState(false);
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('chart');
+  const [frequencyTableData, setFrequencyTableData] = useState<{ category: string; frequency: number; percentage: number }[]>([]);
+  const [crosstabData, setCrosstabData] = useState<any>(null);
   
   // Chart type configurations
   const chartTypes: Record<ChartType, ChartConfig> = {
@@ -149,6 +161,18 @@ const Visualization = () => {
   useEffect(() => {
     if (primaryVariable && variables.length > 0) {
       recommendChartType();
+      
+      // Set appropriate visualization type
+      if (explorationMode === 'distribution' || 
+         (explorationMode === 'relationship' && 
+          getVariableType(primaryVariable) === 'categorical' && 
+          getVariableType(secondaryVariable) === 'categorical')) {
+        // Show table option for categorical variables
+        setVisualizationType('chart'); // Default to chart, user can toggle
+      } else {
+        // For other combinations, default to chart only
+        setVisualizationType('chart');
+      }
     }
   }, [explorationMode, primaryVariable, secondaryVariable]);
   
@@ -203,6 +227,9 @@ const Visualization = () => {
           { name: 'Category C', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
           { name: 'Category D', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
         ];
+        
+        // Also generate frequency table data
+        setFrequencyTableData(calculateFrequencyDistribution([], primaryVariable, 'categorical'));
       } else {
         // Generate numeric distribution data (histogram)
         newChartData = [
@@ -213,6 +240,9 @@ const Visualization = () => {
           { bin: '41-50', frequency: Math.floor(Math.random() * 20) + 5 },
           { bin: '51+', frequency: Math.floor(Math.random() * 10) + 2 },
         ];
+        
+        // Generate binned frequency data for numeric variables
+        setFrequencyTableData(calculateFrequencyDistribution([], primaryVariable, 'numeric'));
       }
     } else if (explorationMode === 'relationship') {
       // Generate relationship data
@@ -233,6 +263,14 @@ const Visualization = () => {
           { name: 'Jun', value: Math.floor(Math.random() * 100) },
         ];
       }
+      
+      // Generate crosstab data if both variables are categorical
+      if (getVariableType(primaryVariable) === 'categorical' && 
+          getVariableType(secondaryVariable) === 'categorical') {
+        setCrosstabData(generateCrosstabData([], primaryVariable, secondaryVariable));
+      } else {
+        setCrosstabData(null);
+      }
     } else if (explorationMode === 'comparison') {
       // Generate comparison data
       newChartData = [
@@ -252,23 +290,49 @@ const Visualization = () => {
           error: Math.floor(Math.random() * 10) + 5
         },
       ];
+      
+      // Generate crosstab data if both variables are categorical
+      if (getVariableType(primaryVariable) === 'categorical' && 
+          getVariableType(secondaryVariable) === 'categorical') {
+        setCrosstabData(generateCrosstabData([], primaryVariable, secondaryVariable));
+      } else {
+        setCrosstabData(null);
+      }
     }
     
     setChartData(newChartData);
     setHasGeneratedChart(true);
     
-    // Generate insights
-    const insight = generateChartInsights(
-      explorationMode,
-      chartType,
-      primaryVariable,
-      secondaryVariable,
-      getVariableType(primaryVariable),
-      getVariableType(secondaryVariable),
-      newChartData
-    );
-    
-    setInsights(insight);
+    // Generate insights based on visualization type
+    if (visualizationType === 'chart') {
+      const chartInsight = generateChartInsights(
+        explorationMode,
+        chartType,
+        primaryVariable,
+        secondaryVariable,
+        getVariableType(primaryVariable),
+        getVariableType(secondaryVariable),
+        newChartData
+      );
+      setInsights(chartInsight);
+    } else if (visualizationType === 'table') {
+      if (crosstabData) {
+        // Generate insights for crosstab
+        const crosstabInsight = generateCrosstabInsights(
+          crosstabData,
+          primaryVariable,
+          secondaryVariable
+        );
+        setInsights(crosstabInsight);
+      } else if (frequencyTableData.length > 0) {
+        // Generate insights for frequency table
+        const freqInsight = generateFrequencyTableInsights(
+          frequencyTableData,
+          primaryVariable
+        );
+        setInsights(freqInsight);
+      }
+    }
   };
   
   const downloadChart = () => {
@@ -280,6 +344,13 @@ const Visualization = () => {
     });
   };
   
+  const downloadTable = () => {
+    toast({
+      title: "Table downloaded",
+      description: "Your table data has been downloaded as CSV",
+    });
+  };
+  
   const addToReport = () => {
     // Save chart data and settings to localStorage for report generation
     localStorage.setItem('chartData', JSON.stringify({
@@ -288,12 +359,13 @@ const Visualization = () => {
       primaryVariable,
       secondaryVariable,
       explorationMode,
-      insights
+      insights,
+      visualizationType
     }));
     
     toast({
       title: "Added to report",
-      description: "Chart has been added to your report",
+      description: `${visualizationType === 'chart' ? 'Chart' : 'Table'} has been added to your report`,
     });
   };
   
@@ -313,10 +385,11 @@ const Visualization = () => {
       primaryVariable,
       secondaryVariable,
       explorationMode,
-      insights
+      insights,
+      visualizationType
     }));
     
-    navigate('/analysis'); // Changed from '/report' to '/analysis'
+    navigate('/analysis');
   };
   
   // Filter chart types based on exploration mode
@@ -345,6 +418,17 @@ const Visualization = () => {
     }
     
     return relevantTypes;
+  };
+  
+  const canShowTable = (): boolean => {
+    if (explorationMode === 'distribution') {
+      return true; // Can always show frequency tables for single variables
+    } else if (explorationMode === 'relationship' || explorationMode === 'comparison') {
+      // Can show crosstabs when both variables are categorical
+      return getVariableType(primaryVariable) === 'categorical' && 
+             getVariableType(secondaryVariable) === 'categorical';
+    }
+    return false;
   };
   
   const renderChartByType = () => {
@@ -644,32 +728,61 @@ const Visualization = () => {
                       )}
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="chart-type">Chart Type</Label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {getRelevantChartTypes().map((type) => (
-                          <button
-                            key={type}
-                            onClick={() => setChartType(type)}
-                            className={`flex flex-col items-center p-3 border rounded-md transition-all ${
-                              chartType === type ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                            }`}
+                    {/* Visualization Type Selection */}
+                    {canShowTable() && (
+                      <div className="space-y-2">
+                        <Label>Visualization Type</Label>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant={visualizationType === 'chart' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setVisualizationType('chart')}
+                            className="flex items-center gap-1"
                           >
-                            <div className="mb-2">
-                              {chartTypes[type].icon}
-                            </div>
-                            <span className="text-xs font-medium">{chartTypes[type].title}</span>
-                          </button>
-                        ))}
+                            <BarChartIcon className="h-4 w-4 mr-1" />
+                            Chart
+                          </Button>
+                          <Button
+                            variant={visualizationType === 'table' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setVisualizationType('table')}
+                            className="flex items-center gap-1"
+                          >
+                            <TableIcon className="h-4 w-4 mr-1" />
+                            {explorationMode === 'distribution' ? "Frequency Table" : "Crosstab Table"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    
+                    {visualizationType === 'chart' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="chart-type">Chart Type</Label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {getRelevantChartTypes().map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setChartType(type)}
+                              className={`flex flex-col items-center p-3 border rounded-md transition-all ${
+                                chartType === type ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="mb-2">
+                                {chartTypes[type].icon}
+                              </div>
+                              <span className="text-xs font-medium">{chartTypes[type].title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex justify-end">
                       <Button
                         onClick={generateChart}
                         className="bg-research-700 hover:bg-research-800"
                       >
-                        Generate Chart
+                        Generate {visualizationType === 'chart' ? 'Chart' : 'Table'}
                       </Button>
                     </div>
                   </div>
@@ -678,34 +791,72 @@ const Visualization = () => {
               
               <Card className="mb-6">
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Chart Preview</CardTitle>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={downloadChart}
-                      disabled={!hasGeneratedChart}
-                      className="flex items-center gap-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addToReport}
-                      disabled={!hasGeneratedChart}
-                      className="flex items-center gap-1"
-                    >
-                      <PlusCircle className="h-4 w-4" />
-                      Add to Report
-                    </Button>
-                  </div>
+                  <CardTitle>
+                    {visualizationType === 'chart' ? 'Chart Preview' : 
+                     explorationMode === 'distribution' ? 'Frequency Table' : 'Crosstab Table'}
+                  </CardTitle>
+                  {visualizationType === 'chart' && hasGeneratedChart && (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={downloadChart}
+                        className="flex items-center gap-1"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addToReport}
+                        className="flex items-center gap-1"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        Add to Report
+                      </Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[400px] w-full bg-white p-4 rounded-md">
-                    {renderChartByType()}
-                  </div>
+                  {visualizationType === 'chart' ? (
+                    <div className="h-[400px] w-full bg-white p-4 rounded-md">
+                      {renderChartByType()}
+                    </div>
+                  ) : explorationMode === 'distribution' ? (
+                    <div className="w-full bg-white p-4 rounded-md">
+                      {frequencyTableData.length > 0 ? (
+                        <FrequencyTable 
+                          data={frequencyTableData} 
+                          variableName={primaryVariable} 
+                          onDownload={downloadTable}
+                          onAddToReport={addToReport}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-[200px]">
+                          <TableIcon className="h-12 w-12 text-gray-400 mb-4" />
+                          <p className="text-gray-500">Generate a frequency table to see the distribution</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full bg-white p-4 rounded-md overflow-x-auto">
+                      {crosstabData ? (
+                        <CrosstabTable 
+                          data={crosstabData} 
+                          rowVariable={primaryVariable} 
+                          columnVariable={secondaryVariable}
+                          onDownload={downloadTable}
+                          onAddToReport={addToReport}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-[200px]">
+                          <TableIcon className="h-12 w-12 text-gray-400 mb-4" />
+                          <p className="text-gray-500">Generate a crosstab table to see relationships</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               

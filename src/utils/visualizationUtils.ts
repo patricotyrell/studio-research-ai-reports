@@ -81,7 +81,6 @@ export const generateChartInsights = (
 
 /**
  * Calculates frequency distribution table data
- * (In a real implementation, this would perform actual calculations based on data)
  */
 export const calculateFrequencyDistribution = (
   data: any[],
@@ -115,6 +114,147 @@ export const calculateFrequencyDistribution = (
       };
     });
   }
+};
+
+/**
+ * Generate crosstabulation data for two categorical variables
+ */
+export const generateCrosstabData = (
+  data: any[],
+  rowVariable: string,
+  columnVariable: string
+) => {
+  // Mock implementation for demo purposes
+  // In a real app, this would calculate actual crosstabs from the dataset
+  
+  const rowValues = ['Yes', 'No', 'Maybe'];
+  const colValues = ['Male', 'Female', 'Other'];
+  
+  const result = {
+    rows: rowValues,
+    columns: colValues,
+    data: {} as Record<string, Record<string, {
+      count: number;
+      rowPercent: number;
+      colPercent: number;
+      totalPercent: number;
+    }>>,
+    rowTotals: {} as Record<string, number>,
+    columnTotals: {} as Record<string, number>,
+    grandTotal: 0
+  };
+  
+  // Initialize data structure
+  rowValues.forEach(row => {
+    result.data[row] = {};
+    result.rowTotals[row] = 0;
+    
+    colValues.forEach(col => {
+      if (!result.columnTotals[col]) {
+        result.columnTotals[col] = 0;
+      }
+      
+      // Generate random count
+      const count = Math.floor(Math.random() * 50) + 10;
+      result.data[row][col] = {
+        count,
+        rowPercent: 0, // Will calculate after totals
+        colPercent: 0, // Will calculate after totals
+        totalPercent: 0 // Will calculate after totals
+      };
+      
+      // Update totals
+      result.rowTotals[row] += count;
+      result.columnTotals[col] += count;
+      result.grandTotal += count;
+    });
+  });
+  
+  // Calculate percentages
+  rowValues.forEach(row => {
+    colValues.forEach(col => {
+      const cell = result.data[row][col];
+      cell.rowPercent = (cell.count / result.rowTotals[row]) * 100;
+      cell.colPercent = (cell.count / result.columnTotals[col]) * 100;
+      cell.totalPercent = (cell.count / result.grandTotal) * 100;
+    });
+  });
+  
+  return result;
+};
+
+/**
+ * Generate insights for frequency tables
+ */
+export const generateFrequencyTableInsights = (
+  data: { category: string; frequency: number; percentage: number }[],
+  variableName: string
+): string => {
+  if (!data || data.length === 0) {
+    return "No data available for insights.";
+  }
+  
+  // Find category with highest frequency
+  const highestCategory = [...data].sort((a, b) => b.frequency - a.frequency)[0];
+  
+  // Find category with lowest frequency
+  const lowestCategory = [...data].sort((a, b) => a.frequency - b.frequency)[0];
+  
+  return `The frequency distribution of ${variableName} shows that "${highestCategory.category}" is the most common category (${highestCategory.percentage.toFixed(1)}% of responses), while "${lowestCategory.category}" is the least common (${lowestCategory.percentage.toFixed(1)}% of responses).
+
+This distribution indicates that the sample ${data.length <= 2 ? "is heavily concentrated in a few categories" : "shows variety across multiple categories"}.`;
+};
+
+/**
+ * Generate insights for crosstab tables
+ */
+export const generateCrosstabInsights = (
+  data: any,
+  rowVariable: string,
+  columnVariable: string
+): string => {
+  if (!data || !data.rows || !data.columns || data.rows.length === 0 || data.columns.length === 0) {
+    return "No data available for insights.";
+  }
+  
+  // Find the cell with the highest count
+  let highestCount = 0;
+  let highestRow = '';
+  let highestCol = '';
+  
+  // Find the cell with the most disproportionate percentage
+  let highestDisproportion = 0;
+  let dispRow = '';
+  let dispCol = '';
+  
+  data.rows.forEach((row: string) => {
+    data.columns.forEach((col: string) => {
+      const cell = data.data[row]?.[col];
+      if (cell) {
+        if (cell.count > highestCount) {
+          highestCount = cell.count;
+          highestRow = row;
+          highestCol = col;
+        }
+        
+        // Check for disproportions (when a cell's actual count is very different from what would be expected)
+        const expectedCount = (data.rowTotals[row] * data.columnTotals[col]) / data.grandTotal;
+        const disproportion = Math.abs(cell.count - expectedCount) / expectedCount;
+        
+        if (disproportion > highestDisproportion) {
+          highestDisproportion = disproportion;
+          dispRow = row;
+          dispCol = col;
+        }
+      }
+    });
+  });
+  
+  return `The crosstabulation between ${rowVariable} and ${columnVariable} shows that the most common combination is "${highestRow}" and "${highestCol}" with ${highestCount} cases.
+
+${highestDisproportion > 0.3 ? `There appears to be an interesting relationship between these variables. The combination of "${dispRow}" and "${dispCol}" occurs ${data.data[dispRow][dispCol].count > (data.rowTotals[dispRow] * data.columnTotals[dispCol]) / data.grandTotal ? "more" : "less"} frequently than would be expected if the variables were completely independent.` : "The distribution appears relatively proportional across categories, suggesting these variables may not have a strong relationship."} 
+
+Consider running a chi-square test to determine if there is a statistically significant association between these variables.`;
 };
 
 /**
