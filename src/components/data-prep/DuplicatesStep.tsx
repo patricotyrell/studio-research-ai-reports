@@ -163,7 +163,6 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<CopyX className="h-6 w-6 text-red-500" />}
-        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -180,7 +179,6 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -273,7 +271,6 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         {duplicateGroups.length > 0 && (
           <div className="mb-8">
