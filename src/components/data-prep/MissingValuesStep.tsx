@@ -125,7 +125,6 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<AlertCircle className="h-6 w-6 text-amber-500" />}
-        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -139,7 +138,6 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
         onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -203,7 +201,6 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>
