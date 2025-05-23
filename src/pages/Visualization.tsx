@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -12,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, BoxPlot, Brush } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Brush } from 'recharts';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Download, Copy, PlusCircle, BarChart as BarChartIcon, PieChart as PieChartIcon, LineChart as LineChartIcon, ScatterChart as ScatterChartIcon, LayoutGrid } from 'lucide-react';
@@ -184,7 +183,7 @@ const Visualization = () => {
       } else if (primaryType === 'categorical' && secondaryType === 'categorical') {
         recommendedChart = 'bar';
       } else if (primaryType === 'numeric' && secondaryType === 'categorical') {
-        recommendedChart = 'boxplot';
+        recommendedChart = 'bar';
       }
     }
     
@@ -482,6 +481,37 @@ const Visualization = () => {
               <Legend />
               <Scatter name="Data Points" data={chartData} fill="#4f46e5" />
             </ScatterChart>
+          </ResponsiveContainer>
+        );
+      
+      case 'boxplot':
+        return (
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: secondaryVariable, angle: -90, position: 'insideLeft' }} />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-white p-3 border rounded shadow-md">
+                        <p className="font-medium">{label}</p>
+                        <p className="text-sm">{`${secondaryVariable}: ${payload[0].value}`}</p>
+                        {payload[0].payload.error && <p className="text-sm text-gray-500">{`Error: ±${payload[0].payload.error}`}</p>}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Legend />
+              <Bar 
+                dataKey={secondaryVariable} 
+                name={secondaryVariable} 
+                fill="#4f46e5" 
+              />
+            </BarChart>
           </ResponsiveContainer>
         );
       
