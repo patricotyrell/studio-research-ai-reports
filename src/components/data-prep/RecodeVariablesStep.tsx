@@ -235,7 +235,6 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
         onBack={handleBackToGuidance}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />

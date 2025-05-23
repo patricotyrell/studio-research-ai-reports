@@ -154,7 +154,6 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Wand2 className="h-6 w-6 text-blue-600" />}
-        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -170,7 +169,6 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -218,7 +216,6 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>

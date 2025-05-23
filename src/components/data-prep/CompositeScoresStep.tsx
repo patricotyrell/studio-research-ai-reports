@@ -192,7 +192,6 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -249,7 +248,6 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {detectedScales.map((scale, scaleIndex) => (

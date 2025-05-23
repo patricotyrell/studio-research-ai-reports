@@ -129,7 +129,6 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Trash className="h-6 w-6 text-red-500" />}
-        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -145,7 +144,6 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
-        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -200,7 +198,6 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
-        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>
