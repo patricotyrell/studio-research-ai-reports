@@ -316,7 +316,7 @@ const Visualization = () => {
       insights
     }));
     
-    navigate('/report');
+    navigate('/analysis'); // Changed from '/report' to '/analysis'
   };
   
   // Filter chart types based on exploration mode
@@ -550,8 +550,8 @@ const Visualization = () => {
     <DashboardLayout>
       <div className="p-6">
         <StepIndicator 
-          currentStep={5} 
-          steps={['Upload', 'Overview', 'Preparation', 'Analysis', 'Visualization', 'Report']} 
+          currentStep={4} // Changed from 5 to 4 
+          steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
         />
         
         <div className="max-w-6xl mx-auto mt-6">
@@ -739,7 +739,7 @@ const Visualization = () => {
                   className="bg-research-700 hover:bg-research-800"
                   disabled={!hasGeneratedChart}
                 >
-                  Continue to Report Generation
+                  Continue to Analysis
                 </Button>
               </div>
             </>

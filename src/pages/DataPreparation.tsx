@@ -59,7 +59,7 @@ const DataPreparation = () => {
     
     setTimeout(() => {
       setLoading(false);
-      navigate('/analysis');
+      navigate('/visualization'); // Changed from '/analysis' to '/visualization'
     }, 1000);
   };
   
@@ -129,7 +129,7 @@ const DataPreparation = () => {
       <div className="p-6">
         <StepIndicator 
           currentStep={3} 
-          steps={['Upload', 'Overview', 'Preparation', 'Analysis', 'Visualization', 'Report']} 
+          steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
         />
         
         <div className="max-w-6xl mx-auto mt-6">

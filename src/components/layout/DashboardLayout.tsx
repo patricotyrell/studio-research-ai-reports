@@ -133,8 +133,8 @@ const SidebarItems: React.FC<SidebarItemsProps> = ({ isActive, setSidebarOpen })
     { path: '/upload', label: 'Upload Data', icon: <Upload size={18} /> },
     { path: '/data-overview', label: 'Data Overview', icon: <FileText size={18} /> },
     { path: '/data-preparation', label: 'Data Preparation', icon: <FileUp size={18} /> },
-    { path: '/analysis', label: 'Analysis', icon: <BarChart2 size={18} /> },
     { path: '/visualization', label: 'Visualization', icon: <ChartBar size={18} /> },
+    { path: '/analysis', label: 'Analysis', icon: <BarChart2 size={18} /> },
     { path: '/report', label: 'Report', icon: <FileBarChart size={18} /> },
     { path: '/settings', label: 'Settings', icon: <Settings size={18} /> },
   ];
