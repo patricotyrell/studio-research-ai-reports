@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +13,8 @@ interface RemoveColumnsStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  showBackButton?: boolean;
+  onSkipToSummary?: () => void;
 }
 
 interface VariableToRemove {
@@ -27,7 +28,13 @@ interface VariableToRemove {
   removalReason?: string;
 }
 
-const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ onComplete, onNext, onBack }) => {
+const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  showBackButton = true,
+  onSkipToSummary 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -122,6 +129,7 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ onComplete, onNex
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Trash className="h-6 w-6 text-red-500" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -135,8 +143,9 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ onComplete, onNex
         description="AI has removed unnecessary columns from your analysis."
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
-        showBackButton={true}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -188,9 +197,10 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ onComplete, onNex
         description="Select variables to remove from your analysis."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
-        onBack={onBack}
-        showBackButton={true}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>

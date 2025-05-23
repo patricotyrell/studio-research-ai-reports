@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -14,6 +13,8 @@ interface StandardizeVariablesStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  showBackButton?: boolean;
+  onSkipToSummary?: () => void;
 }
 
 interface VariableToStandardize {
@@ -25,7 +26,13 @@ interface VariableToStandardize {
   needsStandardizing: boolean;
 }
 
-const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ onComplete, onNext, onBack }) => {
+const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  showBackButton = true,
+  onSkipToSummary 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -147,6 +154,7 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ onC
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Wand2 className="h-6 w-6 text-blue-600" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -160,8 +168,9 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ onC
         description="AI has standardized your variable names for clarity."
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
-        showBackButton={true}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -206,9 +215,10 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ onC
         description="Update variable names for clarity in analysis and reporting."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
-        onBack={onBack}
-        showBackButton={true}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>

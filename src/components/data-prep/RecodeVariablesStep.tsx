@@ -14,6 +14,8 @@ interface RecodeVariablesStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  showBackButton?: boolean;
+  onSkipToSummary?: () => void;
 }
 
 interface CategoricalVariable {
@@ -24,7 +26,13 @@ interface CategoricalVariable {
   needsRecoding: boolean;
 }
 
-const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, onNext, onBack }) => {
+const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  showBackButton = true,
+  onSkipToSummary 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -211,6 +219,7 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<AlertTriangle className="h-6 w-6 text-purple-500" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -224,8 +233,9 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
         description="AI has automatically recoded categorical variables to standardize categories."
         onComplete={handleComplete}
         onBack={handleBackToGuidance}
-        showBackButton={true}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -274,9 +284,10 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({ onComplete, o
         description="Review and update category names and numeric codes for your categorical variables."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
-        onBack={onBack}
-        showBackButton={true}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {variables.map((variable, varIndex) => (

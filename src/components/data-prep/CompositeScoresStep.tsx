@@ -16,6 +16,8 @@ interface CompositeScoresStepProps {
   onComplete: (autoApplied: boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  showBackButton?: boolean;
+  onSkipToSummary?: () => void;
 }
 
 interface DetectedScale {
@@ -25,7 +27,13 @@ interface DetectedScale {
   selected: boolean;
 }
 
-const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({ onComplete, onNext, onBack }) => {
+const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({ 
+  onComplete, 
+  onNext, 
+  onBack, 
+  showBackButton = true,
+  onSkipToSummary 
+}) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
   const [processingAutomatic, setProcessingAutomatic] = useState(false);
@@ -168,6 +176,7 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({ onComplete, o
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Calculator className="h-6 w-6 text-green-600" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -181,8 +190,9 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({ onComplete, o
         description="AI has created composite scores from related question groups."
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
-        showBackButton={true}
+        showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -236,9 +246,10 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({ onComplete, o
         description="Create index variables by combining related questions into a single score."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
-        onBack={onBack}
-        showBackButton={true}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {detectedScales.map((scale, scaleIndex) => (
