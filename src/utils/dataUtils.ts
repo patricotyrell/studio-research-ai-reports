@@ -1,5 +1,5 @@
 
-import { sampleDatasets, getSampleDataset } from '../services/sampleDataService';
+import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 
 // Helper function to check if current file is sample data
 export const isSampleData = () => {
@@ -68,7 +68,7 @@ export const getDatasetPreviewRows = () => {
 };
 
 // Save prepared variables data
-export const savePreparedVariables = (variables: any[]) => {
+export const savePreparedVariables = (variables: DataVariable[]) => {
   localStorage.setItem('preparedVariables', JSON.stringify(variables));
 };
 

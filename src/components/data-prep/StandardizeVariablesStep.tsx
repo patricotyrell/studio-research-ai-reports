@@ -40,8 +40,8 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({ onC
       // Check if name needs standardizing
       const hasUnderscore = v.name.includes('_');
       const hasSpecialChars = /[^a-zA-Z0-9_]/.test(v.name);
-      const isAllLowerCase = v.name === v.name.toLowerCase() && v.name.match(/[a-z]/);
-      const isQ = v.name.match(/^q\d+/i);
+      const isAllLowerCase = v.name === v.name.toLowerCase() && v.name.match(/[a-z]/) !== null;
+      const isQ = v.name.match(/^q\d+/i) !== null;
       
       const needsStandardizing = hasUnderscore || hasSpecialChars || (isAllLowerCase && v.name.length > 3) || isQ;
       

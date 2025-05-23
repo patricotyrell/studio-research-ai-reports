@@ -6,6 +6,8 @@ export interface DataVariable {
   missing: number;
   unique: number;
   example: string;
+  missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore';
+  coding?: { [key: string]: number | null };
 }
 
 export interface DataRow {
