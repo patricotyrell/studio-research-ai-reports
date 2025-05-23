@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -266,7 +267,7 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({ onComplete, onNex
             <div>
               <h4 className="font-medium mb-1">When to Remove Variables</h4>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Variables with mostly missing data (>50%)</li>
+                <li>• Variables with mostly missing data (&gt;50%)</li>
                 <li>• Unique identifiers that aren't needed for analysis</li>
                 <li>• Variables with almost no variance (all values identical)</li>
                 <li>• Redundant variables that measure the same concept</li>
