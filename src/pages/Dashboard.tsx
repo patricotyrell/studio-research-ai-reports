@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
-import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects } from '@/utils/dataUtils';
+import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects, isDemoMode, clearDemoMode } from '@/utils/dataUtils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -15,13 +15,23 @@ const Dashboard = () => {
   const [pastProjects, setPastProjects] = useState<any[]>([]);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   
-  // Check if user is logged in
+  // Check if user is logged in and load projects
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (!user) {
       navigate('/auth');
+      return;
     }
     
+    // Clear demo mode if it's still active
+    if (isDemoMode()) {
+      clearDemoMode();
+    }
+    
+    loadProjects();
+  }, [navigate]);
+
+  const loadProjects = () => {
     // Load current project
     const project = getCurrentProject();
     setCurrentProject(project);
@@ -29,7 +39,10 @@ const Dashboard = () => {
     // Load past projects
     const projects = getPastProjects();
     setPastProjects(projects);
-  }, [navigate]);
+    
+    console.log('Loaded current project:', project);
+    console.log('Loaded past projects:', projects);
+  };
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isDemo = user.role === 'demo';
@@ -37,13 +50,8 @@ const Dashboard = () => {
   
   const handleRenameProject = (newName: string) => {
     updateProjectName(newName);
-    const updatedProject = getCurrentProject();
-    setCurrentProject(updatedProject);
     setShowRenameDialog(false);
-    
-    // Refresh past projects list
-    const projects = getPastProjects();
-    setPastProjects(projects);
+    loadProjects(); // Reload to get updated data
   };
   
   const handleContinueProject = () => {
@@ -89,8 +97,8 @@ const Dashboard = () => {
           }
         </p>
         
-        {/* Current Project Section */}
-        {currentProject && (
+        {/* Current Project Section - Only show for real projects */}
+        {currentProject && !isDemoMode() && (
           <Card className="mb-6 bg-research-50 border-research-200">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -174,8 +182,8 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Collapsible Projects Section */}
-        {pastProjects.length > 0 && (
+        {/* Collapsible Projects Section - Only show for real projects */}
+        {pastProjects.length > 0 && !isDemoMode() && (
           <Card className="mb-8">
             <CardContent className="p-0">
               <Collapsible open={isProjectsOpen} onOpenChange={setIsProjectsOpen}>

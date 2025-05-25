@@ -1,3 +1,4 @@
+
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 
 // Helper function to check if in demo mode
@@ -33,6 +34,9 @@ export const saveProject = (projectInfo: any) => {
   if (isDemoMode()) return;
   
   localStorage.setItem('currentProject', JSON.stringify(projectInfo));
+  
+  // Also save to past projects list immediately
+  saveProjectToPastProjects(projectInfo);
 };
 
 // Save project to past projects list (disabled in demo mode)
@@ -46,10 +50,10 @@ export const saveProjectToPastProjects = (project: any) => {
   
   if (existingIndex >= 0) {
     // Update existing project
-    pastProjects[existingIndex] = project;
+    pastProjects[existingIndex] = { ...project, updatedAt: new Date().toISOString() };
   } else {
     // Add new project
-    pastProjects.push(project);
+    pastProjects.push({ ...project, updatedAt: new Date().toISOString() });
   }
   
   localStorage.setItem('pastProjects', JSON.stringify(pastProjects));
@@ -71,15 +75,13 @@ export const createProject = (projectName: string, fileData: any, processedData?
     id: Date.now().toString(),
     name: projectName,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     fileData,
-    processedData
+    processedData: processedData || {}
   };
   
-  // Save as current project
+  // Save as current project and to past projects
   saveProject(project);
-  
-  // Save to past projects list
-  saveProjectToPastProjects(project);
   
   return project;
 };
@@ -91,10 +93,8 @@ export const updateProjectName = (newName: string) => {
   const project = getCurrentProject();
   if (project) {
     project.name = newName;
+    project.updatedAt = new Date().toISOString();
     saveProject(project);
-    
-    // Also update in past projects
-    saveProjectToPastProjects(project);
   }
 };
 
@@ -104,9 +104,12 @@ export const updateProject = (updates: any) => {
   
   const project = getCurrentProject();
   if (project) {
-    const updatedProject = { ...project, ...updates };
+    const updatedProject = { 
+      ...project, 
+      ...updates, 
+      updatedAt: new Date().toISOString() 
+    };
     saveProject(updatedProject);
-    saveProjectToPastProjects(updatedProject);
     return updatedProject;
   }
   return null;
