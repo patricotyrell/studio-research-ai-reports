@@ -182,6 +182,11 @@ const Visualization = () => {
     const variable = variables.find(v => v.name === varName);
     return variable ? variable.type : '';
   };
+
+  // Get the display name for the variable (for chart labels)
+  const getVariableDisplayName = (varName: string): string => {
+    return varName; // Use the current variable name from the prepared dataset
+  };
   
   const recommendChartType = () => {
     const primaryType = getVariableType(primaryVariable);
@@ -300,7 +305,7 @@ const Visualization = () => {
         
         newChartData = actualCategories.slice(0, 4).map(category => ({
           name: category,
-          [secondaryVariable]: Math.floor(Math.random() * 100),
+          [getVariableDisplayName(secondaryVariable)]: Math.floor(Math.random() * 100),
           error: Math.floor(Math.random() * 10) + 5
         }));
       } else {
@@ -308,17 +313,17 @@ const Visualization = () => {
         newChartData = [
           { 
             name: 'Group A', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
+            [getVariableDisplayName(secondaryVariable)]: Math.floor(Math.random() * 100),
             error: Math.floor(Math.random() * 10) + 5
           },
           { 
             name: 'Group B', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
+            [getVariableDisplayName(secondaryVariable)]: Math.floor(Math.random() * 100),
             error: Math.floor(Math.random() * 10) + 5
           },
           { 
             name: 'Group C', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
+            [getVariableDisplayName(secondaryVariable)]: Math.floor(Math.random() * 100),
             error: Math.floor(Math.random() * 10) + 5
           },
         ];
@@ -341,8 +346,8 @@ const Visualization = () => {
       const chartInsight = generateChartInsights(
         explorationMode,
         chartType,
-        primaryVariable,
-        secondaryVariable,
+        getVariableDisplayName(primaryVariable),
+        getVariableDisplayName(secondaryVariable),
         getVariableType(primaryVariable),
         getVariableType(secondaryVariable),
         newChartData
@@ -353,15 +358,15 @@ const Visualization = () => {
         // Generate insights for crosstab
         const crosstabInsight = generateCrosstabInsights(
           crosstabData,
-          primaryVariable,
-          secondaryVariable
+          getVariableDisplayName(primaryVariable),
+          getVariableDisplayName(secondaryVariable)
         );
         setInsights(crosstabInsight);
       } else if (frequencyTableData.length > 0) {
         // Generate insights for frequency table
         const freqInsight = generateFrequencyTableInsights(
           frequencyTableData,
-          primaryVariable
+          getVariableDisplayName(primaryVariable)
         );
         setInsights(freqInsight);
       }
@@ -389,8 +394,8 @@ const Visualization = () => {
     localStorage.setItem('chartData', JSON.stringify({
       type: chartType,
       data: chartData,
-      primaryVariable,
-      secondaryVariable,
+      primaryVariable: getVariableDisplayName(primaryVariable),
+      secondaryVariable: getVariableDisplayName(secondaryVariable),
       explorationMode,
       insights,
       visualizationType
@@ -415,8 +420,8 @@ const Visualization = () => {
     localStorage.setItem('chartData', JSON.stringify({
       type: chartType,
       data: chartData,
-      primaryVariable,
-      secondaryVariable,
+      primaryVariable: getVariableDisplayName(primaryVariable),
+      secondaryVariable: getVariableDisplayName(secondaryVariable),
       explorationMode,
       insights,
       visualizationType
@@ -482,15 +487,15 @@ const Visualization = () => {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={explorationMode === 'distribution' ? "name" : "name"} label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
-              <YAxis label={{ value: explorationMode === 'comparison' ? secondaryVariable : 'Frequency', angle: -90, position: 'insideLeft' }} />
+              <XAxis dataKey={explorationMode === 'distribution' ? "name" : "name"} label={{ value: getVariableDisplayName(primaryVariable), position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: explorationMode === 'comparison' ? getVariableDisplayName(secondaryVariable) : 'Frequency', angle: -90, position: 'insideLeft' }} />
               <Tooltip 
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-white p-3 border rounded shadow-md">
                         <p className="font-medium">{label}</p>
-                        <p className="text-sm">{`${explorationMode === 'comparison' ? secondaryVariable : 'Value'}: ${payload[0].value}`}</p>
+                        <p className="text-sm">{`${explorationMode === 'comparison' ? getVariableDisplayName(secondaryVariable) : 'Value'}: ${payload[0].value}`}</p>
                         {payload[0].payload.count && <p className="text-sm text-gray-500">{`Count: ${payload[0].payload.count}`}</p>}
                       </div>
                     );
@@ -500,8 +505,8 @@ const Visualization = () => {
               />
               <Legend />
               <Bar 
-                dataKey={explorationMode === 'distribution' ? "value" : explorationMode === 'comparison' ? secondaryVariable : "value"} 
-                name={explorationMode === 'comparison' ? secondaryVariable : primaryVariable} 
+                dataKey={explorationMode === 'distribution' ? "value" : explorationMode === 'comparison' ? getVariableDisplayName(secondaryVariable) : "value"} 
+                name={explorationMode === 'comparison' ? getVariableDisplayName(secondaryVariable) : getVariableDisplayName(primaryVariable)} 
                 fill="#4f46e5" 
               />
             </BarChart>
@@ -513,15 +518,15 @@ const Visualization = () => {
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
-              <YAxis label={{ value: secondaryVariable, angle: -90, position: 'insideLeft' }} />
+              <XAxis dataKey="name" label={{ value: getVariableDisplayName(primaryVariable), position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: getVariableDisplayName(secondaryVariable), angle: -90, position: 'insideLeft' }} />
               <Tooltip 
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-white p-3 border rounded shadow-md">
                         <p className="font-medium">{label}</p>
-                        <p className="text-sm">{`${secondaryVariable || 'Value'}: ${payload[0].value}`}</p>
+                        <p className="text-sm">{`${getVariableDisplayName(secondaryVariable) || 'Value'}: ${payload[0].value}`}</p>
                       </div>
                     );
                   }
@@ -529,7 +534,7 @@ const Visualization = () => {
                 }}
               />
               <Legend />
-              <Line type="monotone" dataKey="value" name={secondaryVariable} stroke="#4f46e5" activeDot={{ r: 8 }} />
+              <Line type="monotone" dataKey="value" name={getVariableDisplayName(secondaryVariable)} stroke="#4f46e5" activeDot={{ r: 8 }} />
             </LineChart>
           </ResponsiveContainer>
         );
@@ -577,8 +582,8 @@ const Visualization = () => {
           <ResponsiveContainer width="100%" height={400}>
             <ScatterChart>
               <CartesianGrid />
-              <XAxis type="number" dataKey="x" name={primaryVariable} label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
-              <YAxis type="number" dataKey="y" name={secondaryVariable} label={{ value: secondaryVariable, angle: -90, position: 'insideLeft' }} />
+              <XAxis type="number" dataKey="x" name={getVariableDisplayName(primaryVariable)} label={{ value: getVariableDisplayName(primaryVariable), position: 'insideBottom', offset: -5 }} />
+              <YAxis type="number" dataKey="y" name={getVariableDisplayName(secondaryVariable)} label={{ value: getVariableDisplayName(secondaryVariable), angle: -90, position: 'insideLeft' }} />
               <ZAxis range={[60, 60]} />
               <Tooltip 
                 cursor={{ strokeDasharray: '3 3' }} 
@@ -587,8 +592,8 @@ const Visualization = () => {
                     return (
                       <div className="bg-white p-3 border rounded shadow-md">
                         <p className="font-medium">Data Point</p>
-                        <p className="text-sm">{`${primaryVariable}: ${payload[0].value}`}</p>
-                        <p className="text-sm">{`${secondaryVariable}: ${payload[1].value}`}</p>
+                        <p className="text-sm">{`${getVariableDisplayName(primaryVariable)}: ${payload[0].value}`}</p>
+                        <p className="text-sm">{`${getVariableDisplayName(secondaryVariable)}: ${payload[1].value}`}</p>
                       </div>
                     );
                   }
@@ -606,15 +611,15 @@ const Visualization = () => {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
-              <YAxis label={{ value: secondaryVariable, angle: -90, position: 'insideLeft' }} />
+              <XAxis dataKey="name" label={{ value: getVariableDisplayName(primaryVariable), position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: getVariableDisplayName(secondaryVariable), angle: -90, position: 'insideLeft' }} />
               <Tooltip 
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-white p-3 border rounded shadow-md">
                         <p className="font-medium">{label}</p>
-                        <p className="text-sm">{`${secondaryVariable}: ${payload[0].value}`}</p>
+                        <p className="text-sm">{`${getVariableDisplayName(secondaryVariable)}: ${payload[0].value}`}</p>
                         {payload[0].payload.error && <p className="text-sm text-gray-500">{`Error: ±${payload[0].payload.error}`}</p>}
                       </div>
                     );
@@ -624,8 +629,8 @@ const Visualization = () => {
               />
               <Legend />
               <Bar 
-                dataKey={secondaryVariable} 
-                name={secondaryVariable} 
+                dataKey={getVariableDisplayName(secondaryVariable)} 
+                name={getVariableDisplayName(secondaryVariable)} 
                 fill="#4f46e5" 
               />
             </BarChart>
@@ -637,14 +642,14 @@ const Visualization = () => {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bin" label={{ value: primaryVariable, position: 'insideBottom', offset: -5 }} />
+              <XAxis dataKey="bin" label={{ value: getVariableDisplayName(primaryVariable), position: 'insideBottom', offset: -5 }} />
               <YAxis label={{ value: 'Frequency', angle: -90, position: 'insideLeft' }} />
               <Tooltip 
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-white p-3 border rounded shadow-md">
-                        <p className="font-medium">{`${primaryVariable}: ${label}`}</p>
+                        <p className="font-medium">{`${getVariableDisplayName(primaryVariable)}: ${label}`}</p>
                         <p className="text-sm">{`Frequency: ${payload[0].value}`}</p>
                       </div>
                     );
@@ -872,7 +877,7 @@ const Visualization = () => {
                       {frequencyTableData.length > 0 ? (
                         <FrequencyTable 
                           data={frequencyTableData} 
-                          variableName={primaryVariable} 
+                          variableName={getVariableDisplayName(primaryVariable)} 
                           onDownload={downloadTable}
                           onAddToReport={addToReport}
                         />
@@ -888,8 +893,8 @@ const Visualization = () => {
                       {crosstabData ? (
                         <CrosstabTable 
                           data={crosstabData} 
-                          rowVariable={primaryVariable} 
-                          columnVariable={secondaryVariable}
+                          rowVariable={getVariableDisplayName(primaryVariable)} 
+                          columnVariable={getVariableDisplayName(secondaryVariable)}
                           onDownload={downloadTable}
                           onAddToReport={addToReport}
                         />
