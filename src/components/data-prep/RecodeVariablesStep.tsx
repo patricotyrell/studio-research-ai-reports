@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus, Check, AlertTriangle, Info } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Info, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
