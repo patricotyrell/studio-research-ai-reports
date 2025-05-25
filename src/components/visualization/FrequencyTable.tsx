@@ -27,6 +27,9 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
   if (!data || data.length === 0) {
     return <p className="text-center text-gray-500 my-8">No data available for frequency analysis.</p>;
   }
+  
+  // Calculate total for verification
+  const totalFrequency = data.reduce((sum, item) => sum + item.frequency, 0);
 
   return (
     <div className="space-y-4">
@@ -71,6 +74,11 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
                 <TableCell className="text-right">{row.percentage.toFixed(1)}%</TableCell>
               </TableRow>
             ))}
+            <TableRow className="bg-gray-50">
+              <TableCell className="font-medium">Total</TableCell>
+              <TableCell className="text-right">{totalFrequency}</TableCell>
+              <TableCell className="text-right">100.0%</TableCell>
+            </TableRow>
           </TableBody>
         </Table>
       </div>

@@ -190,10 +190,8 @@ const Visualization = () => {
          (explorationMode === 'relationship' && 
           getVariableType(primaryVariable) === 'categorical' && 
           getVariableType(secondaryVariable) === 'categorical')) {
-        // Show table option for categorical variables
-        setVisualizationType('chart'); // Default to chart, user can toggle
+        setVisualizationType('chart');
       } else {
-        // For other combinations, default to chart only
         setVisualizationType('chart');
       }
     }
@@ -208,7 +206,7 @@ const Visualization = () => {
     const primaryType = getVariableType(primaryVariable);
     const secondaryType = getVariableType(secondaryVariable);
     
-    let recommendedChart: ChartType = 'bar'; // Default
+    let recommendedChart: ChartType = 'bar';
     
     if (explorationMode === 'distribution') {
       if (primaryType === 'numeric') {
@@ -238,42 +236,35 @@ const Visualization = () => {
   };
   
   const generateChart = () => {
-    // Generate synthetic data based on selected variables and chart type
+    console.log('Generating chart with consistent calculations...');
+    
+    // Generate frequency table data first for consistency
+    const newFrequencyTableData = calculateFrequencyDistribution([], primaryVariable, getVariableType(primaryVariable));
+    setFrequencyTableData(newFrequencyTableData);
+    
+    // Generate chart data that matches the frequency table
     let newChartData: any[] = [];
     
     if (explorationMode === 'distribution') {
-      if (primaryVariable && getVariableType(primaryVariable) === 'categorical') {
-        // Get actual categories from the dataset
-        const primaryVar = variables.find(v => v.name === primaryVariable);
-        const actualCategories = primaryVar?.originalCategories || 
-                                (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
-        
-        // Generate categorical distribution data using actual categories
-        newChartData = actualCategories.slice(0, 6).map(category => ({
-          name: category,
-          value: Math.floor(Math.random() * 40) + 10,
-          count: Math.floor(Math.random() * 50) + 20
+      if (getVariableType(primaryVariable) === 'categorical') {
+        // Use the same data as frequency table for consistency
+        newChartData = newFrequencyTableData.map(item => ({
+          name: item.category,
+          value: item.frequency,
+          count: item.frequency,
+          percentage: item.percentage
         }));
-        
-        // Also generate frequency table data with actual categories
-        setFrequencyTableData(calculateFrequencyDistribution([], primaryVariable, 'categorical'));
       } else {
-        // Generate numeric distribution data (histogram)
-        newChartData = [
-          { bin: '0-10', frequency: Math.floor(Math.random() * 20) + 5 },
-          { bin: '11-20', frequency: Math.floor(Math.random() * 30) + 10 },
-          { bin: '21-30', frequency: Math.floor(Math.random() * 40) + 15 },
-          { bin: '31-40', frequency: Math.floor(Math.random() * 30) + 10 },
-          { bin: '41-50', frequency: Math.floor(Math.random() * 20) + 5 },
-          { bin: '51+', frequency: Math.floor(Math.random() * 10) + 2 },
-        ];
-        
-        // Generate binned frequency data for numeric variables
-        setFrequencyTableData(calculateFrequencyDistribution([], primaryVariable, 'numeric'));
+        // For numeric variables, use frequency data as bins
+        newChartData = newFrequencyTableData.map(item => ({
+          bin: item.category,
+          frequency: item.frequency,
+          percentage: item.percentage
+        }));
       }
     } else if (explorationMode === 'relationship') {
-      // Generate relationship data
       if (chartType === 'scatter') {
+        // Generate scatter plot data
         for (let i = 0; i < 30; i++) {
           newChartData.push({
             x: Math.floor(Math.random() * 100),
@@ -281,19 +272,14 @@ const Visualization = () => {
           });
         }
       } else {
-        // For line charts or bar charts in relationship mode
+        // For other relationship charts, use consistent data
         if (getVariableType(primaryVariable) === 'categorical') {
-          // Use actual categories for the primary variable
-          const primaryVar = variables.find(v => v.name === primaryVariable);
-          const actualCategories = primaryVar?.originalCategories || 
-                                  (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
-          
-          newChartData = actualCategories.slice(0, 6).map(category => ({
-            name: category,
-            value: Math.floor(Math.random() * 100)
+          newChartData = newFrequencyTableData.map(item => ({
+            name: item.category,
+            value: Math.floor(Math.random() * 100),
+            frequency: item.frequency
           }));
         } else {
-          // Default to month names for non-categorical relationships
           newChartData = [
             { name: 'Jan', value: Math.floor(Math.random() * 100) },
             { name: 'Feb', value: Math.floor(Math.random() * 100) },
@@ -313,35 +299,19 @@ const Visualization = () => {
         setCrosstabData(null);
       }
     } else if (explorationMode === 'comparison') {
-      // Generate comparison data using actual categories
+      // Generate comparison data using consistent frequencies
       if (getVariableType(primaryVariable) === 'categorical') {
-        const primaryVar = variables.find(v => v.name === primaryVariable);
-        const actualCategories = primaryVar?.originalCategories || 
-                                (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
-        
-        newChartData = actualCategories.slice(0, 4).map(category => ({
-          name: category,
+        newChartData = newFrequencyTableData.map(item => ({
+          name: item.category,
           [secondaryVariable]: Math.floor(Math.random() * 100),
-          error: Math.floor(Math.random() * 10) + 5
+          error: Math.floor(Math.random() * 10) + 5,
+          frequency: item.frequency
         }));
       } else {
-        // Fallback to generic groups if primary variable isn't categorical
         newChartData = [
-          { 
-            name: 'Group A', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
-            error: Math.floor(Math.random() * 10) + 5
-          },
-          { 
-            name: 'Group B', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
-            error: Math.floor(Math.random() * 10) + 5
-          },
-          { 
-            name: 'Group C', 
-            [secondaryVariable]: Math.floor(Math.random() * 100),
-            error: Math.floor(Math.random() * 10) + 5
-          },
+          { name: 'Group A', [secondaryVariable]: Math.floor(Math.random() * 100), error: Math.floor(Math.random() * 10) + 5 },
+          { name: 'Group B', [secondaryVariable]: Math.floor(Math.random() * 100), error: Math.floor(Math.random() * 10) + 5 },
+          { name: 'Group C', [secondaryVariable]: Math.floor(Math.random() * 100), error: Math.floor(Math.random() * 10) + 5 },
         ];
       }
       
@@ -357,6 +327,8 @@ const Visualization = () => {
     setChartData(newChartData);
     setHasGeneratedChart(true);
     
+    console.log('Generated data:', { chartData: newChartData, frequencyData: newFrequencyTableData });
+    
     // Generate insights based on visualization type
     if (visualizationType === 'chart') {
       const chartInsight = generateChartInsights(
@@ -371,17 +343,15 @@ const Visualization = () => {
       setInsights(chartInsight);
     } else if (visualizationType === 'table') {
       if (crosstabData) {
-        // Generate insights for crosstab
         const crosstabInsight = generateCrosstabInsights(
           crosstabData,
           primaryVariable,
           secondaryVariable
         );
         setInsights(crosstabInsight);
-      } else if (frequencyTableData.length > 0) {
-        // Generate insights for frequency table
+      } else if (newFrequencyTableData.length > 0) {
         const freqInsight = generateFrequencyTableInsights(
-          frequencyTableData,
+          newFrequencyTableData,
           primaryVariable
         );
         setInsights(freqInsight);
@@ -390,8 +360,6 @@ const Visualization = () => {
   };
   
   const downloadChart = () => {
-    // In a real implementation, we'd use a library like html2canvas
-    // to capture the chart as an image and download it
     toast({
       title: "Chart downloaded",
       description: "Your chart image has been downloaded as PNG",
@@ -406,7 +374,6 @@ const Visualization = () => {
   };
   
   const addToReport = () => {
-    // Save chart data and settings to localStorage for report generation
     localStorage.setItem('chartData', JSON.stringify({
       type: chartType,
       data: chartData,
@@ -414,7 +381,8 @@ const Visualization = () => {
       secondaryVariable: secondaryVariable,
       explorationMode,
       insights,
-      visualizationType
+      visualizationType,
+      frequencyTableData
     }));
     
     toast({
@@ -432,7 +400,6 @@ const Visualization = () => {
   };
   
   const handleContinue = () => {
-    // Make sure we save the chart data before navigating
     localStorage.setItem('chartData', JSON.stringify({
       type: chartType,
       data: chartData,
@@ -440,7 +407,8 @@ const Visualization = () => {
       secondaryVariable: secondaryVariable,
       explorationMode,
       insights,
-      visualizationType
+      visualizationType,
+      frequencyTableData
     }));
     
     navigate('/analysis');
@@ -466,7 +434,6 @@ const Visualization = () => {
       }
     });
     
-    // If no relevant charts found, include default options
     if (relevantTypes.length === 0) {
       return ['bar', 'line', 'pie'];
     }
@@ -476,9 +443,8 @@ const Visualization = () => {
   
   const canShowTable = (): boolean => {
     if (explorationMode === 'distribution') {
-      return true; // Can always show frequency tables for single variables
+      return true;
     } else if (explorationMode === 'relationship' || explorationMode === 'comparison') {
-      // Can show crosstabs when both variables are categorical
       return getVariableType(primaryVariable) === 'categorical' && 
              getVariableType(secondaryVariable) === 'categorical';
     }

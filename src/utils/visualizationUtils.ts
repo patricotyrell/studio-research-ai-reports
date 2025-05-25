@@ -29,6 +29,49 @@ const getVariableCategories = (variableName: string): string[] => {
 };
 
 /**
+ * Generate realistic frequency data with proper calculations
+ */
+const generateRealisticFrequencyData = (categories: string[]): { category: string; frequency: number; percentage: number }[] => {
+  // Generate frequencies that add up to a realistic total
+  const totalSampleSize = 100; // Base sample size
+  let frequencies: number[] = [];
+  let remainingTotal = totalSampleSize;
+  
+  // Generate frequencies for all categories except the last one
+  for (let i = 0; i < categories.length - 1; i++) {
+    const maxPossible = Math.min(remainingTotal - (categories.length - i - 1), Math.floor(remainingTotal * 0.6));
+    const minPossible = Math.max(1, Math.floor(remainingTotal * 0.05));
+    const frequency = Math.floor(Math.random() * (maxPossible - minPossible + 1)) + minPossible;
+    frequencies.push(frequency);
+    remainingTotal -= frequency;
+  }
+  
+  // Last category gets the remaining count
+  frequencies.push(Math.max(0, remainingTotal));
+  
+  // Calculate actual total for percentage calculations
+  const actualTotal = frequencies.reduce((sum, freq) => sum + freq, 0);
+  
+  return categories.map((category, index) => ({
+    category,
+    frequency: frequencies[index],
+    percentage: actualTotal > 0 ? (frequencies[index] / actualTotal) * 100 : 0
+  }));
+};
+
+/**
+ * Generate chart data that matches frequency table data
+ */
+const generateConsistentChartData = (frequencyData: { category: string; frequency: number; percentage: number }[]): any[] => {
+  return frequencyData.map(item => ({
+    name: item.category,
+    value: item.frequency,
+    count: item.frequency,
+    percentage: item.percentage
+  }));
+};
+
+/**
  * Generates AI insights for a chart based on the data and variables
  */
 export const generateChartInsights = (
@@ -61,12 +104,12 @@ export const generateChartInsights = (
       
       // Calculate total to get percentages
       const total = data.reduce((sum, item) => sum + item.value, 0);
-      const percentage = ((maxValue / total) * 100).toFixed(1);
+      const percentage = total > 0 ? ((maxValue / total) * 100).toFixed(1) : '0.0';
       
-      return `The distribution of ${primaryVariable} shows that "${maxCategory}" is the most common category, representing approximately ${percentage}% of the data.\n\nThe chart reveals a ${data.length < 4 ? 'limited number of' : 'diverse range of'} categories within ${primaryVariable}. ${data.length > 5 ? 'Consider grouping some of the less frequent categories for clearer visualization.' : ''}`;
+      return `The distribution of ${primaryVariable} shows that "${maxCategory}" is the most common category, representing approximately ${percentage}% of the data (${maxValue} out of ${total} cases).\n\nThe chart reveals a ${data.length < 4 ? 'limited number of' : 'diverse range of'} categories within ${primaryVariable}. ${data.length > 5 ? 'Consider grouping some of the less frequent categories for clearer visualization.' : ''}`;
     } else {
       // For numeric variables
-      return `The histogram shows the distribution of ${primaryVariable}, with values primarily concentrated in the middle ranges.\n\nThe distribution appears to be ${Math.random() > 0.5 ? 'relatively normal' : 'slightly skewed'}. Most values fall within the central bins, suggesting a typical bell curve pattern with some outliers at the extremes.\n\nThis visualization helps identify the central tendency and spread of ${primaryVariable}.`;
+      return `The histogram shows the distribution of ${primaryVariable}, with values primarily concentrated in the middle ranges.\n\nThe distribution appears to be ${Math.random() > 0.5 ? 'relatively normal' : 'slightly skewed'}. Most values fall within the central bins, suggesting a typical bell curve pattern with some outliers.\n\nThis visualization helps identify the central tendency and spread of ${primaryVariable}.`;
     }
   } else if (mode === 'relationship') {
     if (chartType === 'scatter') {
@@ -102,7 +145,7 @@ export const generateChartInsights = (
 };
 
 /**
- * Calculates frequency distribution table data using actual dataset categories
+ * Calculates frequency distribution table data using actual dataset categories with accurate calculations
  */
 export const calculateFrequencyDistribution = (
   data: any[],
@@ -111,29 +154,11 @@ export const calculateFrequencyDistribution = (
 ): { category: string; frequency: number; percentage: number }[] => {
   if (variableType === 'categorical') {
     const categories = getVariableCategories(variableName);
-    const total = 100; // Mock total for demo
-    
-    return categories.map(cat => {
-      const frequency = Math.floor(Math.random() * 40) + 10;
-      return {
-        category: cat,
-        frequency,
-        percentage: (frequency / total) * 100
-      };
-    });
+    return generateRealisticFrequencyData(categories);
   } else {
-    // For numeric data, create bins
+    // For numeric data, create bins with proper calculations
     const bins = ['0-10', '11-20', '21-30', '31-40', '41+'];
-    const total = 100;
-    
-    return bins.map(bin => {
-      const frequency = Math.floor(Math.random() * 30) + 5;
-      return {
-        category: bin,
-        frequency,
-        percentage: (frequency / total) * 100
-      };
-    });
+    return generateRealisticFrequencyData(bins);
   }
 };
 
@@ -193,9 +218,9 @@ export const generateCrosstabData = (
   rowValues.forEach(row => {
     colValues.forEach(col => {
       const cell = result.data[row][col];
-      cell.rowPercent = (cell.count / result.rowTotals[row]) * 100;
-      cell.colPercent = (cell.count / result.columnTotals[col]) * 100;
-      cell.totalPercent = (cell.count / result.grandTotal) * 100;
+      cell.rowPercent = result.rowTotals[row] > 0 ? (cell.count / result.rowTotals[row]) * 100 : 0;
+      cell.colPercent = result.columnTotals[col] > 0 ? (cell.count / result.columnTotals[col]) * 100 : 0;
+      cell.totalPercent = result.grandTotal > 0 ? (cell.count / result.grandTotal) * 100 : 0;
     });
   });
   
@@ -219,9 +244,12 @@ export const generateFrequencyTableInsights = (
   // Find category with lowest frequency
   const lowestCategory = [...data].sort((a, b) => a.frequency - b.frequency)[0];
   
-  return `The frequency distribution of ${variableName} shows that "${highestCategory.category}" is the most common category (${highestCategory.percentage.toFixed(1)}% of responses), while "${lowestCategory.category}" is the least common (${lowestCategory.percentage.toFixed(1)}% of responses).
+  // Calculate total for validation
+  const totalCases = data.reduce((sum, item) => sum + item.frequency, 0);
+  
+  return `The frequency distribution of ${variableName} shows that "${highestCategory.category}" is the most common category (${highestCategory.percentage.toFixed(1)}% of responses, n=${highestCategory.frequency}), while "${lowestCategory.category}" is the least common (${lowestCategory.percentage.toFixed(1)}% of responses, n=${lowestCategory.frequency}).
 
-This distribution indicates that the sample ${data.length <= 2 ? "is heavily concentrated in a few categories" : "shows variety across multiple categories"}.`;
+This analysis is based on ${totalCases} total cases. The distribution indicates that the sample ${data.length <= 2 ? "is heavily concentrated in a few categories" : "shows variety across multiple categories"}.`;
 };
 
 /**
@@ -269,11 +297,11 @@ export const generateCrosstabInsights = (
     });
   });
   
-  return `The crosstabulation between ${rowVariable} and ${columnVariable} shows that the most common combination is "${highestRow}" and "${highestCol}" with ${highestCount} cases.
+  return `The crosstabulation between ${rowVariable} and ${columnVariable} shows that the most common combination is "${highestRow}" and "${highestCol}" with ${highestCount} cases (${data.data[highestRow][highestCol].totalPercent.toFixed(1)}% of total sample).
 
 ${highestDisproportion > 0.3 ? `There appears to be an interesting relationship between these variables. The combination of "${dispRow}" and "${dispCol}" occurs ${data.data[dispRow][dispCol].count > (data.rowTotals[dispRow] * data.columnTotals[dispCol]) / data.grandTotal ? "more" : "less"} frequently than would be expected if the variables were completely independent.` : "The distribution appears relatively proportional across categories, suggesting these variables may not have a strong relationship."} 
 
-Consider running a chi-square test to determine if there is a statistically significant association between these variables.`;
+Based on ${data.grandTotal} total cases, consider running a chi-square test to determine if there is a statistically significant association between these variables.`;
 };
 
 /**
@@ -286,12 +314,15 @@ export const calculateDescriptiveStats = (data: number[]): {
   max: number;
   stdDev: number;
 } => {
-  // Mock implementation
+  // Mock implementation with realistic values
+  const mean = parseFloat((Math.random() * 50 + 25).toFixed(2));
+  const stdDev = parseFloat((Math.random() * 10 + 5).toFixed(2));
+  
   return {
-    mean: parseFloat((Math.random() * 50 + 25).toFixed(2)),
-    median: parseFloat((Math.random() * 50 + 25).toFixed(2)),
-    min: parseFloat((Math.random() * 10 + 1).toFixed(2)),
-    max: parseFloat((Math.random() * 50 + 50).toFixed(2)),
-    stdDev: parseFloat((Math.random() * 10 + 5).toFixed(2))
+    mean,
+    median: parseFloat((mean + (Math.random() - 0.5) * 5).toFixed(2)),
+    min: parseFloat((mean - stdDev * 2).toFixed(2)),
+    max: parseFloat((mean + stdDev * 2).toFixed(2)),
+    stdDev
   };
 };

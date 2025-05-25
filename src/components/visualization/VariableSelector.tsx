@@ -45,10 +45,10 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
           onValueChange={onPrimaryVariableChange}
           key={`primary-${variablesKey}`}
         >
-          <SelectTrigger id="primary-variable">
+          <SelectTrigger id="primary-variable" className="bg-white">
             <SelectValue placeholder="Select variable" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-white">
             {variables.map(variable => (
               <SelectItem key={`primary-${variable.name}`} value={variable.name}>
                 {variable.name} ({variable.type})
@@ -68,10 +68,10 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
             onValueChange={onSecondaryVariableChange}
             key={`secondary-${variablesKey}`}
           >
-            <SelectTrigger id="secondary-variable">
+            <SelectTrigger id="secondary-variable" className="bg-white">
               <SelectValue placeholder="Select variable" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white">
               {variables.map(variable => (
                 <SelectItem key={`secondary-${variable.name}`} value={variable.name}>
                   {variable.name} ({variable.type})
