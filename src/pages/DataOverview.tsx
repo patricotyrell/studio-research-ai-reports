@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -6,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import StepIndicator from '@/components/StepIndicator';
 import PaginatedDataPreview from '@/components/PaginatedDataPreview';
 import { CheckCircle, AlertTriangle, Info } from 'lucide-react';
@@ -141,43 +141,45 @@ const DataOverview = () => {
               <CardTitle className="text-lg">Variables</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="font-medium">Name</TableHead>
-                      <TableHead className="font-medium">Type</TableHead>
-                      <TableHead className="font-medium">Missing</TableHead>
-                      <TableHead className="font-medium">Unique</TableHead>
-                      <TableHead className="font-medium">Example</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {columns.map((column) => (
-                      <TableRow key={column.name}>
-                        <TableCell className="font-medium py-3">{column.name}</TableCell>
-                        <TableCell className="py-3">
-                          <Badge variant="secondary" className={
-                            column.type === 'text' ? "bg-blue-100 text-blue-800" :
-                            column.type === 'categorical' ? "bg-purple-100 text-purple-800" :
-                            column.type === 'numeric' ? "bg-green-100 text-green-800" :
-                            "bg-orange-100 text-orange-800"
-                          }>
-                            {column.type.charAt(0).toUpperCase() + column.type.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <span className={column.missing > 0 ? "text-amber-600" : "text-green-600"}>
-                            {column.missing}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3">{column.unique}</TableCell>
-                        <TableCell className="py-3 max-w-[200px] truncate">{column.example}</TableCell>
+              <ScrollArea className="h-96">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-medium">Name</TableHead>
+                        <TableHead className="font-medium">Type</TableHead>
+                        <TableHead className="font-medium">Missing</TableHead>
+                        <TableHead className="font-medium">Unique</TableHead>
+                        <TableHead className="font-medium">Example</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {columns.map((column) => (
+                        <TableRow key={column.name}>
+                          <TableCell className="font-medium py-3">{column.name}</TableCell>
+                          <TableCell className="py-3">
+                            <Badge variant="secondary" className={
+                              column.type === 'text' ? "bg-blue-100 text-blue-800" :
+                              column.type === 'categorical' ? "bg-purple-100 text-purple-800" :
+                              column.type === 'numeric' ? "bg-green-100 text-green-800" :
+                              "bg-orange-100 text-orange-800"
+                            }>
+                              {column.type.charAt(0).toUpperCase() + column.type.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <span className={column.missing > 0 ? "text-amber-600" : "text-green-600"}>
+                              {column.missing}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3">{column.unique}</TableCell>
+                          <TableCell className="py-3 max-w-[200px] truncate">{column.example}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
           
