@@ -22,7 +22,8 @@ const getVariableCategories = (variableName: string): string[] => {
   } else {
     // Fallback: extract unique values from preview data
     const previewRows = getDatasetPreviewRows();
-    const uniqueValues = [...new Set(previewRows.map(row => row[variableName]).filter(v => v != null))];
+    const uniqueValues = [...new Set(previewRows.map(row => row[variableName]).filter(v => v != null))]
+      .map(v => String(v)); // Convert to string to ensure type safety
     return uniqueValues.slice(0, 10); // Limit to 10 categories for display
   }
 };
