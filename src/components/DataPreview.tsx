@@ -2,8 +2,8 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database } from 'lucide-react';
-import { getDatasetPreviewRows } from '@/utils/dataUtils';
+import { Database, CheckCircle } from 'lucide-react';
+import { getDatasetPreviewRows, hasDatasetBeenModified } from '@/utils/dataUtils';
 
 interface DataPreviewProps {
   maxRows?: number;
@@ -11,6 +11,7 @@ interface DataPreviewProps {
 
 const DataPreview: React.FC<DataPreviewProps> = ({ maxRows = 5 }) => {
   const previewRows = getDatasetPreviewRows();
+  const isModified = hasDatasetBeenModified();
   
   if (!previewRows || previewRows.length === 0) {
     return null;
@@ -25,6 +26,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ maxRows = 5 }) => {
         <CardTitle className="flex items-center text-lg">
           <Database className="h-5 w-5 mr-2" />
           Data Preview
+          {isModified && (
+            <div className="ml-2 flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-md">
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Prepared
+            </div>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">

@@ -230,6 +230,12 @@ export const getDatasetVariables = () => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) return [];
   
+  // First try to get prepared variables (post data-prep)
+  const preparedVars = getPreparedVariables();
+  if (preparedVars && preparedVars.length > 0) {
+    return preparedVars;
+  }
+  
   if (isSampleData() && fileInfo.id) {
     const sampleData = getSampleDataset(fileInfo.id);
     return sampleData?.variables || [];
@@ -249,6 +255,12 @@ export const getDatasetVariables = () => {
 export const getDatasetPreviewRows = () => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) return [];
+  
+  // First try to get prepared data rows (post data-prep)
+  const preparedData = getPreparedDataRows();
+  if (preparedData && preparedData.length > 0) {
+    return preparedData;
+  }
   
   if (isSampleData() && fileInfo.id) {
     const sampleData = getSampleDataset(fileInfo.id);
@@ -276,4 +288,105 @@ export const getPreparedVariables = () => {
   if (!variablesData) return null;
   
   return JSON.parse(variablesData);
+};
+
+// Save prepared data rows
+export const savePreparedDataRows = (rows: any[]) => {
+  localStorage.setItem('preparedDataRows', JSON.stringify(rows));
+};
+
+// Get prepared data rows
+export const getPreparedDataRows = () => {
+  const rowsData = localStorage.getItem('preparedDataRows');
+  if (!rowsData) return null;
+  
+  return JSON.parse(rowsData);
+};
+
+// Get the most recent dataset state (for visualization and analysis)
+export const getCurrentDatasetState = () => {
+  const variables = getDatasetVariables();
+  const previewRows = getDatasetPreviewRows();
+  const completedSteps = getCompletedSteps();
+  
+  return {
+    variables,
+    previewRows,
+    completedSteps,
+    hasBeenPrepared: Object.values(completedSteps).some(step => step === true)
+  };
+};
+
+// Check if dataset has been modified during preparation
+export const hasDatasetBeenModified = () => {
+  const completedSteps = getCompletedSteps();
+  return Object.values(completedSteps).some(step => step === true);
+};
+
+// Apply data preparation changes (simulated for demo)
+export const applyDataPrepChanges = (stepType: string, changes: any) => {
+  const currentVars = getDatasetVariables();
+  const currentRows = getDatasetPreviewRows();
+  
+  // Simulate applying changes based on step type
+  let updatedVars = [...currentVars];
+  let updatedRows = [...currentRows];
+  
+  switch (stepType) {
+    case 'missingValues':
+      // Mark that missing values have been handled
+      updatedVars = updatedVars.map(v => ({ ...v, missing: 0 }));
+      break;
+      
+    case 'recodeVariables':
+      // Update variable types and names if recoded
+      if (changes.recodedVariables) {
+        changes.recodedVariables.forEach((recode: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
+          if (varIndex >= 0) {
+            updatedVars[varIndex] = {
+              ...updatedVars[varIndex],
+              name: recode.newName || recode.originalName,
+              type: recode.newType || updatedVars[varIndex].type
+            };
+          }
+        });
+      }
+      break;
+      
+    case 'removeColumns':
+      // Remove specified columns
+      if (changes.removedColumns) {
+        updatedVars = updatedVars.filter(v => !changes.removedColumns.includes(v.name));
+        updatedRows = updatedRows.map(row => {
+          const newRow = { ...row };
+          changes.removedColumns.forEach((col: string) => {
+            delete newRow[col];
+          });
+          return newRow;
+        });
+      }
+      break;
+      
+    case 'standardizeVariables':
+      // Update variable names if standardized
+      if (changes.standardizedNames) {
+        changes.standardizedNames.forEach((change: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
+          if (varIndex >= 0) {
+            updatedVars[varIndex] = {
+              ...updatedVars[varIndex],
+              name: change.newName
+            };
+          }
+        });
+      }
+      break;
+  }
+  
+  // Save the updated state
+  savePreparedVariables(updatedVars);
+  savePreparedDataRows(updatedRows);
+  
+  return { variables: updatedVars, previewRows: updatedRows };
 };

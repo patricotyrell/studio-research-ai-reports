@@ -13,10 +13,10 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Brush } from 'recharts';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Download, Copy, PlusCircle, BarChart as BarChartIcon, PieChart as PieChartIcon, LineChart as LineChartIcon, ScatterChart as ScatterChartIcon, LayoutGrid, Table as TableIcon } from 'lucide-react';
+import { AlertCircle, Download, Copy, PlusCircle, BarChart as BarChartIcon, PieChart as PieChartIcon, LineChart as LineChartIcon, ScatterChart as ScatterChartIcon, LayoutGrid, Table as TableIcon, Info } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import StepIndicator from '@/components/StepIndicator';
-import { getDatasetVariables } from '@/utils/dataUtils';
+import { getCurrentDatasetState, hasDatasetBeenModified } from '@/utils/dataUtils';
 import { 
   generateChartInsights, 
   calculateFrequencyDistribution, 
@@ -27,7 +27,7 @@ import {
 import { DataVariable } from '@/services/sampleDataService';
 import FrequencyTable from '@/components/visualization/FrequencyTable';
 import CrosstabTable from '@/components/visualization/CrosstabTable';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
@@ -59,6 +59,7 @@ const Visualization = () => {
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('chart');
   const [frequencyTableData, setFrequencyTableData] = useState<{ category: string; frequency: number; percentage: number }[]>([]);
   const [crosstabData, setCrosstabData] = useState<any>(null);
+  const [datasetState, setDatasetState] = useState<any>(null);
   
   // Chart type configurations
   const chartTypes: Record<ChartType, ChartConfig> = {
@@ -128,31 +129,32 @@ const Visualization = () => {
       return;
     }
     
-    // Load dataset variables
-    const datasetVars = getDatasetVariables();
-    if (!datasetVars || datasetVars.length === 0) {
+    // Load the most recent dataset state (prepared or original)
+    const currentState = getCurrentDatasetState();
+    if (!currentState.variables || currentState.variables.length === 0) {
       navigate('/data-overview');
       return;
     }
     
-    setVariables(datasetVars);
+    setDatasetState(currentState);
+    setVariables(currentState.variables);
     
     // Set default variables when variables are loaded
-    if (datasetVars.length > 0) {
+    if (currentState.variables.length > 0) {
       // Find first categorical and numeric variables as defaults
-      const categoricalVar = datasetVars.find(v => v.type === 'categorical')?.name;
-      const numericVar = datasetVars.find(v => v.type === 'numeric')?.name;
+      const categoricalVar = currentState.variables.find(v => v.type === 'categorical')?.name;
+      const numericVar = currentState.variables.find(v => v.type === 'numeric')?.name;
       
       if (categoricalVar) {
         setPrimaryVariable(categoricalVar);
       } else {
-        setPrimaryVariable(datasetVars[0].name);
+        setPrimaryVariable(currentState.variables[0].name);
       }
       
       if (numericVar) {
         setSecondaryVariable(numericVar);
-      } else if (datasetVars.length > 1) {
-        setSecondaryVariable(datasetVars[1].name);
+      } else if (currentState.variables.length > 1) {
+        setSecondaryVariable(currentState.variables[1].name);
       }
     }
   }, [navigate]);
@@ -634,7 +636,7 @@ const Visualization = () => {
     <DashboardLayout>
       <div className="p-6">
         <StepIndicator 
-          currentStep={4} // Changed from 5 to 4 
+          currentStep={4}
           steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
         />
         
@@ -643,10 +645,21 @@ const Visualization = () => {
             <div>
               <h1 className="text-3xl font-bold text-research-900 mb-2">Data Visualization</h1>
               <p className="text-gray-600">
-                Create insightful visualizations based on your data and get AI-powered interpretations.
+                Create insightful visualizations based on your {datasetState?.hasBeenPrepared ? 'prepared' : 'original'} data and get AI-powered interpretations.
               </p>
             </div>
           </div>
+          
+          {/* Show dataset status alert */}
+          {datasetState?.hasBeenPrepared && (
+            <Alert className="mb-6 bg-green-50 border-green-200">
+              <Info className="h-4 w-4 text-green-600" />
+              <AlertTitle>Using Prepared Dataset</AlertTitle>
+              <AlertDescription>
+                This visualization uses your prepared dataset with applied data cleaning and transformations from the preparation steps.
+              </AlertDescription>
+            </Alert>
+          )}
           
           {variables.length > 0 ? (
             <>
