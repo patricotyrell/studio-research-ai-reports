@@ -341,6 +341,8 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   let updatedVars = [...currentVars];
   let updatedRows = [...currentRows];
   
+  console.log(`Applying data prep changes for ${stepType}:`, changes);
+  
   switch (stepType) {
     case 'missingValues':
       // Mark that missing values have been handled
@@ -383,19 +385,34 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       
     case 'standardizeVariables':
       // Update variable names if standardized
+      console.log('Applying variable standardization:', changes);
       if (changes.standardizedNames) {
         changes.standardizedNames.forEach((change: any) => {
           const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
           if (varIndex >= 0) {
+            console.log(`Updating variable name from "${change.oldName}" to "${change.newName}"`);
             updatedVars[varIndex] = {
               ...updatedVars[varIndex],
               name: change.newName
             };
+            
+            // Also update the row data keys
+            updatedRows = updatedRows.map(row => {
+              if (row.hasOwnProperty(change.oldName)) {
+                const newRow = { ...row };
+                newRow[change.newName] = newRow[change.oldName];
+                delete newRow[change.oldName];
+                return newRow;
+              }
+              return row;
+            });
           }
         });
       }
       break;
   }
+  
+  console.log('Updated variables after data prep:', updatedVars.map(v => ({ name: v.name, type: v.type })));
   
   // Save the updated state
   savePreparedVariables(updatedVars);

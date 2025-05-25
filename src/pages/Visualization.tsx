@@ -53,6 +53,7 @@ const Visualization = () => {
   const [frequencyTableData, setFrequencyTableData] = useState<{ category: string; frequency: number; percentage: number }[]>([]);
   const [crosstabData, setCrosstabData] = useState<any>(null);
   const [datasetState, setDatasetState] = useState<any>(null);
+  const [variablesVersion, setVariablesVersion] = useState(0); // Force re-renders
   
   // Chart type configurations
   const chartTypes: Record<ChartType, ChartConfig> = {
@@ -124,44 +125,59 @@ const Visualization = () => {
     
     // Load the most recent dataset state (prepared or original)
     const currentState = getCurrentDatasetState();
+    console.log('Loading current dataset state:', currentState);
+    
     if (!currentState.variables || currentState.variables.length === 0) {
       navigate('/data-overview');
       return;
     }
     
-    console.log('Loading dataset state:', currentState);
-    console.log('Current variables:', currentState.variables.map(v => ({ name: v.name, type: v.type })));
+    console.log('Current variables with details:', currentState.variables.map(v => ({ 
+      name: v.name, 
+      type: v.type,
+      originalCategories: v.originalCategories,
+      coding: v.coding 
+    })));
     
     setDatasetState(currentState);
     setVariables(currentState.variables);
+    setVariablesVersion(prev => prev + 1); // Force component re-renders
     
-    // Always reset selections when loading new dataset state to avoid mismatched variable names
-    console.log('Resetting variable selections due to dataset state change');
+    // Clear existing selections to ensure fresh state
+    console.log('Clearing variable selections for fresh state');
     setPrimaryVariable('');
     setSecondaryVariable('');
     
-    // Set default variables after a brief delay to ensure state is updated
+    // Set default variables after state is updated
     setTimeout(() => {
       if (currentState.variables.length > 0) {
         // Find first categorical and numeric variables as defaults
-        const categoricalVar = currentState.variables.find(v => v.type === 'categorical')?.name;
-        const numericVar = currentState.variables.find(v => v.type === 'numeric')?.name;
+        const categoricalVar = currentState.variables.find(v => v.type === 'categorical');
+        const numericVar = currentState.variables.find(v => v.type === 'numeric');
         
-        console.log('Setting default variables:', { categoricalVar, numericVar });
+        console.log('Available variable types:', {
+          categorical: categoricalVar?.name,
+          numeric: numericVar?.name,
+          total: currentState.variables.length
+        });
         
         if (categoricalVar) {
-          setPrimaryVariable(categoricalVar);
-        } else {
+          console.log('Setting primary variable to:', categoricalVar.name);
+          setPrimaryVariable(categoricalVar.name);
+        } else if (currentState.variables.length > 0) {
+          console.log('No categorical variables found, using first variable:', currentState.variables[0].name);
           setPrimaryVariable(currentState.variables[0].name);
         }
         
         if (numericVar && currentState.variables.length > 1) {
-          setSecondaryVariable(numericVar);
+          console.log('Setting secondary variable to:', numericVar.name);
+          setSecondaryVariable(numericVar.name);
         } else if (currentState.variables.length > 1) {
+          console.log('No numeric variables found, using second variable:', currentState.variables[1].name);
           setSecondaryVariable(currentState.variables[1].name);
         }
       }
-    }, 100);
+    }, 200);
   }, [navigate]);
   
   // Handle exploration mode change and recommend chart type
@@ -181,7 +197,7 @@ const Visualization = () => {
         setVisualizationType('chart');
       }
     }
-  }, [explorationMode, primaryVariable, secondaryVariable]);
+  }, [explorationMode, primaryVariable, secondaryVariable, variables]);
   
   const getVariableType = (varName: string): string => {
     const variable = variables.find(v => v.name === varName);

@@ -106,6 +106,23 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
       }));
       
       setVariables(updatedVariables);
+      
+      // Save the changes immediately for automatic standardization
+      const standardizedNames = updatedVariables
+        .filter(v => v.selected)
+        .map(v => ({
+          oldName: v.originalName,
+          newName: v.standardizedName
+        }));
+      
+      if (standardizedNames.length > 0) {
+        console.log('Applying automatic standardization:', standardizedNames);
+        // Import and use the utility function
+        import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
+          applyDataPrepChanges('standardizeVariables', { standardizedNames });
+        });
+      }
+      
       setProcessingAutomatic(false);
       setCompletedAutomatic(true);
     }, 1500);
@@ -133,6 +150,24 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
   };
   
   const handleComplete = () => {
+    // For manual completion, save the changes
+    if (!completedAutomatic) {
+      const standardizedNames = variables
+        .filter(v => v.selected)
+        .map(v => ({
+          oldName: v.originalName,
+          newName: v.standardizedName
+        }));
+      
+      if (standardizedNames.length > 0) {
+        console.log('Applying manual standardization:', standardizedNames);
+        // Import and use the utility function
+        import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
+          applyDataPrepChanges('standardizeVariables', { standardizedNames });
+        });
+      }
+    }
+    
     onComplete(completedAutomatic);
     onNext();
   };
@@ -216,10 +251,7 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
       <StepFlow
         title="Standardize Variable Names"
         description="Update variable names for clarity in analysis and reporting."
-        onComplete={() => {
-          onComplete(false);
-          onNext();
-        }}
+        onComplete={handleComplete}
         onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"

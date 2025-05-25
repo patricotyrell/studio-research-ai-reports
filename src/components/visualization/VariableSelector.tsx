@@ -29,6 +29,9 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
   onPrimaryVariableChange,
   onSecondaryVariableChange,
 }) => {
+  // Create a unique key based on variables to force re-render when they change
+  const variablesKey = variables.map(v => `${v.name}-${v.type}`).join('|');
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="space-y-2">
@@ -40,7 +43,7 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
         <Select 
           value={primaryVariable} 
           onValueChange={onPrimaryVariableChange}
-          key={`primary-${variables.length}-${JSON.stringify(variables.map(v => v.name))}`}
+          key={`primary-${variablesKey}`}
         >
           <SelectTrigger id="primary-variable">
             <SelectValue placeholder="Select variable" />
@@ -63,7 +66,7 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
           <Select 
             value={secondaryVariable} 
             onValueChange={onSecondaryVariableChange}
-            key={`secondary-${variables.length}-${JSON.stringify(variables.map(v => v.name))}`}
+            key={`secondary-${variablesKey}`}
           >
             <SelectTrigger id="secondary-variable">
               <SelectValue placeholder="Select variable" />
