@@ -15,6 +15,8 @@ interface MissingValuesStepProps {
   onBack: () => void;
   onSkipToSummary: () => void;
   showBackButton?: boolean;
+  currentStep?: number;
+  totalSteps?: number;
 }
 
 interface VariableWithMissing {
@@ -31,7 +33,9 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
   onNext, 
   onBack, 
   onSkipToSummary, 
-  showBackButton = true 
+  showBackButton = true,
+  currentStep,
+  totalSteps
 }) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
@@ -99,18 +103,29 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
 
   const handleComplete = () => {
     onComplete(completedAutomatic);
-    onNext();
   };
 
   if (variables.length === 0) {
     return (
-      <Alert className="mb-6 bg-green-50 border-green-200">
-        <Check className="h-4 w-4 text-green-600" />
-        <AlertTitle>No Missing Values</AlertTitle>
-        <AlertDescription>
-          Great news! Your dataset doesn't have any missing values. You can proceed to the next step.
-        </AlertDescription>
-      </Alert>
+      <StepFlow
+        title="Handle Missing Values"
+        description="No missing values found in your dataset."
+        onComplete={handleComplete}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
+        completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+      >
+        <Alert className="mb-6 bg-green-50 border-green-200">
+          <Check className="h-4 w-4 text-green-600" />
+          <AlertTitle>No Missing Values</AlertTitle>
+          <AlertDescription>
+            Great news! Your dataset doesn't have any missing values. You can proceed to the next step.
+          </AlertDescription>
+        </Alert>
+      </StepFlow>
     );
   }
 
@@ -138,6 +153,9 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
         onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -201,6 +219,9 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
       >
         <Table>
           <TableHeader>

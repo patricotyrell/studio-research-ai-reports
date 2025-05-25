@@ -17,9 +17,15 @@ interface DataPrepSummaryProps {
   };
   onContinue: () => void;
   onBack?: () => void;
+  showBackButton?: boolean;
 }
 
-const DataPrepSummary: React.FC<DataPrepSummaryProps> = ({ completedSteps, onContinue, onBack }) => {
+const DataPrepSummary: React.FC<DataPrepSummaryProps> = ({ 
+  completedSteps, 
+  onContinue, 
+  onBack, 
+  showBackButton = true 
+}) => {
   const totalSteps = Object.keys(completedSteps).length;
   const completedCount = Object.values(completedSteps).filter(Boolean).length;
   
@@ -86,7 +92,7 @@ const DataPrepSummary: React.FC<DataPrepSummaryProps> = ({ completedSteps, onCon
         </Card>
 
         <div className="flex justify-between">
-          {onBack && (
+          {showBackButton && onBack && (
             <Button 
               variant="outline" 
               onClick={onBack}

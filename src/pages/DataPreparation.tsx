@@ -16,6 +16,8 @@ import DuplicatesStep from '@/components/data-prep/DuplicatesStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
 import { saveStepCompletion, getCompletedSteps } from '@/utils/dataUtils';
 
+const TOTAL_STEPS = 6;
+
 const DataPreparation = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -47,11 +49,18 @@ const DataPreparation = () => {
   };
   
   const handleNext = () => {
-    setCurrentStep(prev => Math.min(7, prev + 1));
+    if (currentStep < TOTAL_STEPS) {
+      setCurrentStep(prev => prev + 1);
+    } else {
+      // Last step, go to summary
+      setCurrentStep(7);
+    }
   };
   
   const handleBack = () => {
-    setCurrentStep(prev => Math.max(1, prev - 1));
+    if (currentStep > 1) {
+      setCurrentStep(prev => prev - 1);
+    }
   };
 
   const handleSkipToSummary = () => {
@@ -68,14 +77,18 @@ const DataPreparation = () => {
   };
   
   const renderCurrentStep = () => {
+    const stepNames = ['missingValues', 'recodeVariables', 'compositeScores', 'standardizeVariables', 'removeColumns', 'fixDuplicates'];
+    
     const commonProps = {
       onComplete: (autoApplied: boolean) => {
-        const stepNames = ['missingValues', 'recodeVariables', 'compositeScores', 'standardizeVariables', 'removeColumns', 'fixDuplicates'];
         handleStepComplete(stepNames[currentStep - 1], autoApplied);
+        handleNext();
       },
       onNext: handleNext,
       onBack: handleBack,
-      onSkipToSummary: handleSkipToSummary
+      onSkipToSummary: handleSkipToSummary,
+      currentStep,
+      totalSteps: TOTAL_STEPS
     };
 
     switch (currentStep) {
@@ -127,6 +140,7 @@ const DataPreparation = () => {
             completedSteps={completedSteps} 
             onContinue={handleFinish}
             onBack={handleBack}
+            showBackButton={true}
           />
         );
       default:
@@ -163,7 +177,7 @@ const DataPreparation = () => {
           {currentStep < 7 && (
             <Alert className="mb-6 bg-blue-50 border-blue-200">
               <Info className="h-4 w-4 text-blue-600" />
-              <AlertTitle>Step {currentStep} of 6: {getStepTitle(currentStep)}</AlertTitle>
+              <AlertTitle>Step {currentStep} of {TOTAL_STEPS}: {getStepTitle(currentStep)}</AlertTitle>
               <AlertDescription>
                 {getStepDescription(currentStep)}
               </AlertDescription>
