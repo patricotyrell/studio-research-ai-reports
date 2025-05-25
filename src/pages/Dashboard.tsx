@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen } from 'lucide-react';
-import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects, saveProjectToPastProjects } from '@/utils/dataUtils';
+import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects } from '@/utils/dataUtils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -57,6 +57,7 @@ const Dashboard = () => {
     if (project.fileData) {
       localStorage.setItem('currentFile', JSON.stringify(project.fileData));
       localStorage.setItem('processedData', JSON.stringify(project.processedData || {}));
+      localStorage.setItem('isSampleData', project.fileData.id ? 'true' : 'false');
     }
     setCurrentProject(project);
     navigate('/data-overview');
@@ -66,6 +67,14 @@ const Dashboard = () => {
     const updatedProjects = pastProjects.filter(p => p.id !== projectId);
     setPastProjects(updatedProjects);
     localStorage.setItem('pastProjects', JSON.stringify(updatedProjects));
+    
+    // If the deleted project is the current project, clear it
+    if (currentProject && currentProject.id === projectId) {
+      localStorage.removeItem('currentProject');
+      localStorage.removeItem('currentFile');
+      localStorage.removeItem('processedData');
+      setCurrentProject(null);
+    }
   };
   
   return (

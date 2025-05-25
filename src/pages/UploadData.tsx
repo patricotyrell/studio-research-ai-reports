@@ -4,30 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import StepIndicator from '@/components/StepIndicator';
-import { processCSVData, saveProject } from '@/utils/dataUtils';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { processCSVData, createProject } from '@/utils/dataUtils';
 
 const UploadData = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [processedData, setProcessedData] = useState<any>(null);
-  const { toast } = useToast();
   const navigate = useNavigate();
-
-  // Check if user is logged in
-  React.useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (!user) {
-      navigate('/auth');
-    }
-  }, [navigate]);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -47,64 +35,62 @@ const UploadData = () => {
     setIsDragging(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      const droppedFile = e.dataTransfer.files[0];
+      handleFileSelection(droppedFile);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      handleFileSelection(selectedFile);
     }
   };
 
-  const processFile = async (uploadedFile: File) => {
-    setError(null);
-    
-    // Check file type
-    const allowedTypes = ['.csv', '.xls', '.xlsx'];
-    const fileExtension = uploadedFile.name.substring(uploadedFile.name.lastIndexOf('.')).toLowerCase();
-    
-    if (!allowedTypes.includes(fileExtension)) {
-      setError('Invalid file format. Please upload a CSV or Excel file.');
+  const handleFileSelection = async (selectedFile: File) => {
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
+      toast.error('Invalid file format', {
+        description: 'Please upload a CSV file.',
+      });
       return;
     }
     
-    setFile(uploadedFile);
-    setLoading(true);
+    setFile(selectedFile);
+    setIsProcessing(true);
     
     try {
-      // Process CSV data
-      const data = await processCSVData(uploadedFile);
-      setProcessedData(data);
+      const processed = await processCSVData(selectedFile);
+      setProcessedData(processed);
       
-      // Store processed data temporarily
-      localStorage.setItem('processedData', JSON.stringify(data));
+      // Store file info
+      const fileInfo = {
+        name: selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type,
+        dateUploaded: new Date().toISOString(),
+        rows: processed.totalRows,
+        columns: processed.variables.length
+      };
       
-      toast({
-        title: "File processed successfully",
-        description: `Found ${data.variables.length} variables and ${data.totalRows} rows.`,
-      });
+      localStorage.setItem('currentFile', JSON.stringify(fileInfo));
+      localStorage.setItem('processedData', JSON.stringify(processed));
+      localStorage.setItem('isSampleData', 'false');
       
-      setLoading(false);
       setShowProjectDialog(true);
-    } catch (error: any) {
-      setError(error.message || 'Failed to process file');
-      setLoading(false);
+      
+    } catch (error) {
+      console.error('Error processing file:', error);
+      toast.error('Error processing file', {
+        description: error instanceof Error ? error.message : 'Failed to process the uploaded file',
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleProjectName = (projectName: string) => {
+  const handleProjectCreate = (projectName: string) => {
     if (!file || !processedData) return;
     
-    // Create project information
-    const projectInfo = {
-      id: Date.now().toString(),
-      name: projectName,
-      createdAt: new Date().toISOString(),
-      lastModified: new Date().toISOString()
-    };
-    
-    // Store file information
     const fileInfo = {
       name: file.name,
       size: file.size,
@@ -114,14 +100,12 @@ const UploadData = () => {
       columns: processedData.variables.length
     };
     
-    // Save to localStorage
-    saveProject(projectInfo);
-    localStorage.setItem('currentFile', JSON.stringify(fileInfo));
-    localStorage.setItem('isSampleData', 'false');
+    // Create and save the project
+    createProject(projectName, fileInfo, processedData);
     
-    // Clear any previous prep steps
-    localStorage.removeItem('completedPrepSteps');
-    localStorage.removeItem('preparedVariables');
+    toast.success('Project created successfully', {
+      description: `"${projectName}" is ready for analysis`,
+    });
     
     setShowProjectDialog(false);
     navigate('/data-overview');
@@ -130,95 +114,110 @@ const UploadData = () => {
   return (
     <DashboardLayout>
       <div className="p-6">
-        <StepIndicator 
-          currentStep={1} 
-          steps={['Upload', 'Overview', 'Preparation', 'Analysis', 'Visualization', 'Report']} 
-        />
-        
-        <div className="max-w-3xl mx-auto mt-6">
-          <h1 className="text-3xl font-bold text-research-900 mb-2">Upload Your Research Data</h1>
-          <p className="text-gray-600 mb-6">
-            Upload a CSV or Excel file containing your survey data to begin analysis.
-          </p>
-          
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-research-900 mb-2">Upload Your Data</h1>
+            <p className="text-gray-600">
+              Upload a CSV file to begin your research analysis. We'll process your data and guide you through the preparation steps.
+            </p>
+          </div>
           
           <Card className="border-dashed border-2 border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors">
             <CardContent className="p-8">
               <div 
-                className={`flex flex-col items-center justify-center h-40 rounded-lg ${isDragging ? 'bg-research-50 border-2 border-dashed border-research-300' : ''}`}
+                className={`flex flex-col items-center justify-center h-60 rounded-lg transition-colors ${
+                  isDragging 
+                    ? 'bg-research-50 border-2 border-dashed border-research-300' 
+                    : file 
+                      ? 'bg-green-50 border-2 border-dashed border-green-300'
+                      : ''
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <div className="p-3 rounded-full bg-research-100 mb-4">
-                  <Upload className="h-6 w-6 text-research-700" />
-                </div>
-                
-                <p className="mb-2 text-sm text-gray-700">
-                  <span className="font-medium">Click to upload</span> or drag and drop
-                </p>
-                <p className="text-xs text-gray-500">CSV or Excel files (max 10MB)</p>
-                
-                {file && (
-                  <div className="mt-4 p-2 bg-research-100 rounded text-sm text-research-700 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <span>{file.name}</span>
+                {isProcessing ? (
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-research-700 mx-auto mb-4"></div>
+                    <p className="text-research-700 font-medium">Processing your file...</p>
+                    <p className="text-sm text-gray-500 mt-1">This may take a moment</p>
                   </div>
+                ) : file ? (
+                  <div className="text-center">
+                    <div className="p-3 rounded-full bg-green-100 mb-4 mx-auto w-fit">
+                      <FileText className="h-8 w-8 text-green-600" />
+                    </div>
+                    <p className="text-lg font-medium text-green-700 mb-2">{file.name}</p>
+                    <p className="text-sm text-gray-500 mb-4">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB • Ready to process
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setFile(null);
+                        setProcessedData(null);
+                      }}
+                    >
+                      Choose Different File
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-4 rounded-full bg-research-100 mb-6">
+                      <Upload className="h-12 w-12 text-research-700" />
+                    </div>
+                    
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Upload Your CSV File</h3>
+                    <p className="text-gray-500 mb-6 text-center max-w-md">
+                      Drag and drop your CSV file here, or click to browse and select a file from your computer.
+                    </p>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                      <Button 
+                        className="bg-research-700 hover:bg-research-800"
+                        onClick={() => document.getElementById('file-upload')?.click()}
+                      >
+                        Browse Files
+                      </Button>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>CSV files only (max 10MB)</span>
+                    </div>
+                  </>
                 )}
                 
                 <input
                   id="file-upload"
                   type="file"
-                  accept=".csv,.xls,.xlsx"
+                  accept=".csv"
                   className="hidden"
                   onChange={handleFileChange}
                 />
               </div>
-              
-              <div className="flex justify-center mt-6">
-                <Button 
-                  className="bg-research-700 hover:bg-research-800"
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  disabled={loading}
-                >
-                  {loading ? 'Processing...' : 'Browse Files'}
-                </Button>
-              </div>
             </CardContent>
           </Card>
           
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold mb-3">Guidelines for Successful Upload</h2>
-            <ul className="list-disc pl-5 space-y-2 text-gray-600">
-              <li>File must be in CSV or Excel format</li>
-              <li>Data should be in tabular format with headers in the first row</li>
-              <li>Missing values should be left empty or marked as NA</li>
-              <li>For best results, ensure your variables have descriptive names</li>
+          {/* File Requirements */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">File Requirements</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• CSV format with headers in the first row</li>
+              <li>• Maximum file size: 10MB</li>
+              <li>• UTF-8 encoding recommended</li>
+              <li>• Each column should represent a variable/question</li>
             </ul>
           </div>
-          
-          <div className="text-center mt-6">
-            <p className="text-sm text-gray-500">
-              Need a sample file to test? <a href="#" className="text-research-700 hover:underline">Download sample CSV</a>
-            </p>
-          </div>
         </div>
-        
-        <ProjectNameDialog
-          open={showProjectDialog}
-          onConfirm={handleProjectName}
-          defaultName={file ? file.name.replace(/\.[^/.]+$/, "") : ""}
-          title="Name Your Project"
-          description="Give your research project a descriptive name to help you identify it later."
-        />
       </div>
+      
+      <ProjectNameDialog
+        open={showProjectDialog}
+        onConfirm={handleProjectCreate}
+        title="Name Your Project"
+        description="Give your research project a descriptive name to help you identify it later."
+      />
     </DashboardLayout>
   );
 };

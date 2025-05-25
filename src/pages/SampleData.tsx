@@ -1,11 +1,13 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { BarChart2, FileText, Users, Activity, ChevronRight, Download } from 'lucide-react';
+import { createProject } from '@/utils/dataUtils';
 
 type SampleDataset = {
   id: string;
@@ -19,6 +21,8 @@ type SampleDataset = {
 
 const SampleData = () => {
   const navigate = useNavigate();
+  const [selectedDataset, setSelectedDataset] = useState<SampleDataset | null>(null);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
 
   const sampleDatasets: SampleDataset[] = [
     {
@@ -51,28 +55,36 @@ const SampleData = () => {
   ];
 
   const handleSelectDataset = (dataset: SampleDataset) => {
-    // In a real app, we would fetch the actual dataset from the server
-    // For now, we'll create a mock dataset structure based on the metadata
+    setSelectedDataset(dataset);
+    setShowProjectDialog(true);
+  };
+
+  const handleProjectCreate = (projectName: string) => {
+    if (!selectedDataset) return;
     
     // Create a mock file info object similar to what would be generated from a real upload
     const fileInfo = {
-      name: `${dataset.name}.csv`,
-      size: Math.floor(dataset.rows * dataset.columns * 20), // Approximate size based on rows and columns
+      name: `${selectedDataset.name}.csv`,
+      size: Math.floor(selectedDataset.rows * selectedDataset.columns * 20), // Approximate size
       type: 'text/csv',
       dateUploaded: new Date().toISOString(),
-      rows: dataset.rows,
-      columns: dataset.columns,
-      id: dataset.id
+      rows: selectedDataset.rows,
+      columns: selectedDataset.columns,
+      id: selectedDataset.id
     };
     
-    // Store the selected dataset info in localStorage (this simulates having loaded a real file)
+    // Store the selected dataset info in localStorage
     localStorage.setItem('currentFile', JSON.stringify(fileInfo));
     localStorage.setItem('isSampleData', 'true');
     
+    // Create and save the project
+    createProject(projectName, fileInfo);
+    
     toast.success('Sample dataset loaded successfully', {
-      description: 'You can now explore the data and analysis features'
+      description: `"${projectName}" is ready for analysis`
     });
     
+    setShowProjectDialog(false);
     // Navigate to the data overview page
     navigate('/data-overview');
   };
@@ -171,6 +183,13 @@ const SampleData = () => {
           </div>
         </div>
       </div>
+      
+      <ProjectNameDialog
+        open={showProjectDialog}
+        onConfirm={handleProjectCreate}
+        title="Name Your Project"
+        description="Give your research project a descriptive name to help you identify it later."
+      />
     </DashboardLayout>
   );
 };
