@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -157,21 +156,11 @@ const DataPreparation = () => {
         />
         
         <div className="max-w-6xl mx-auto mt-6">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-research-900 mb-2">Data Preparation</h1>
-              <p className="text-gray-600">
-                Prepare your data for analysis by following our AI-guided workflow or making manual adjustments.
-              </p>
-            </div>
-            {currentStep < 7 && (
-              <Button 
-                variant="outline"
-                onClick={handleSkipToSummary}
-              >
-                Skip to Summary
-              </Button>
-            )}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-research-900 mb-2">Data Preparation</h1>
+            <p className="text-gray-600">
+              Prepare your data for analysis by following our AI-guided workflow or making manual adjustments.
+            </p>
           </div>
           
           {currentStep < 7 && (
