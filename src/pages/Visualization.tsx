@@ -21,6 +21,8 @@ import VariableSelector from '@/components/visualization/VariableSelector';
 import ChartTypeSelector from '@/components/visualization/ChartTypeSelector';
 import ChartRenderer from '@/components/visualization/ChartRenderer';
 import InsightsPanel from '@/components/visualization/InsightsPanel';
+import { getValidChartTypes, getRecommendedChartType, canShowTable as canShowTableUtil, isChartTypeValid } from '@/utils/chartSelectionUtils';
+import ChartValidationAlert from '@/components/visualization/ChartValidationAlert';
 
 type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
@@ -203,35 +205,10 @@ const Visualization = () => {
   };
   
   const recommendChartType = () => {
-    const primaryType = getVariableType(primaryVariable);
-    const secondaryType = getVariableType(secondaryVariable);
+    const primaryType = getVariableType(primaryVariable) as any;
+    const secondaryType = getVariableType(secondaryVariable) as any;
     
-    let recommendedChart: ChartType = 'bar';
-    
-    if (explorationMode === 'distribution') {
-      if (primaryType === 'numeric') {
-        recommendedChart = 'histogram';
-      } else if (primaryType === 'categorical') {
-        recommendedChart = 'bar';
-      }
-    } else if (explorationMode === 'relationship') {
-      if (primaryType === 'numeric' && secondaryType === 'numeric') {
-        recommendedChart = 'scatter';
-      } else if (primaryType === 'date' || secondaryType === 'date') {
-        recommendedChart = 'line';
-      } else {
-        recommendedChart = 'bar';
-      }
-    } else if (explorationMode === 'comparison') {
-      if (primaryType === 'categorical' && secondaryType === 'numeric') {
-        recommendedChart = 'bar';
-      } else if (primaryType === 'categorical' && secondaryType === 'categorical') {
-        recommendedChart = 'bar';
-      } else if (primaryType === 'numeric' && secondaryType === 'categorical') {
-        recommendedChart = 'bar';
-      }
-    }
-    
+    const recommendedChart = getRecommendedChartType(explorationMode, primaryType, secondaryType);
     setChartType(recommendedChart);
   };
   
@@ -416,39 +393,18 @@ const Visualization = () => {
   
   // Filter chart types based on exploration mode
   const getRelevantChartTypes = (): ChartType[] => {
-    const relevantTypes: ChartType[] = [];
+    const primaryType = getVariableType(primaryVariable) as any;
+    const secondaryType = getVariableType(secondaryVariable) as any;
     
-    Object.entries(chartTypes).forEach(([type, config]) => {
-      const chartType = type as ChartType;
-      const primaryType = getVariableType(primaryVariable);
-      const secondaryType = getVariableType(secondaryVariable);
-      
-      if (explorationMode === 'distribution' && config.recommendedFor.distribution?.includes(primaryType)) {
-        relevantTypes.push(chartType);
-      } else if (explorationMode === 'relationship' && 
-                config.recommendedFor.relationship?.includes(primaryType) && 
-                config.recommendedFor.relationship?.includes(secondaryType)) {
-        relevantTypes.push(chartType);
-      } else if (explorationMode === 'comparison' && config.recommendedFor.comparison?.includes(primaryType)) {
-        relevantTypes.push(chartType);
-      }
-    });
-    
-    if (relevantTypes.length === 0) {
-      return ['bar', 'line', 'pie'];
-    }
-    
-    return relevantTypes;
+    return getValidChartTypes(explorationMode, primaryType, secondaryType);
   };
   
+  // Updated function to check if table can be shown
   const canShowTable = (): boolean => {
-    if (explorationMode === 'distribution') {
-      return true;
-    } else if (explorationMode === 'relationship' || explorationMode === 'comparison') {
-      return getVariableType(primaryVariable) === 'categorical' && 
-             getVariableType(secondaryVariable) === 'categorical';
-    }
-    return false;
+    const primaryType = getVariableType(primaryVariable) as any;
+    const secondaryType = getVariableType(secondaryVariable) as any;
+    
+    return canShowTableUtil(explorationMode, primaryType, secondaryType);
   };
   
   return (
@@ -504,6 +460,19 @@ const Visualization = () => {
                       }}
                     />
                     
+                    {/* Chart Validation Alert */}
+                    {primaryVariable && (
+                      <ChartValidationAlert
+                        primaryVariable={primaryVariable}
+                        secondaryVariable={secondaryVariable}
+                        primaryType={getVariableType(primaryVariable)}
+                        secondaryType={getVariableType(secondaryVariable)}
+                        explorationMode={explorationMode}
+                        validChartTypes={getRelevantChartTypes()}
+                        selectedChartType={chartType}
+                      />
+                    )}
+                    
                     <ChartTypeSelector
                       chartType={chartType}
                       visualizationType={visualizationType}
@@ -518,6 +487,7 @@ const Visualization = () => {
                       <Button
                         onClick={generateChart}
                         className="bg-research-700 hover:bg-research-800"
+                        disabled={getRelevantChartTypes().length === 0 && !canShowTable()}
                       >
                         Generate {visualizationType === 'chart' ? 'Chart' : 'Table'}
                       </Button>
@@ -526,6 +496,7 @@ const Visualization = () => {
                 </CardContent>
               </Card>
               
+              {/* ... keep existing Card for Chart Preview */}
               <Card className="mb-6">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>
@@ -571,6 +542,7 @@ const Visualization = () => {
                 </CardContent>
               </Card>
               
+              {/* ... keep existing InsightsPanel and continue button */}
               {hasGeneratedChart && (
                 <InsightsPanel
                   insights={insights}
@@ -589,6 +561,7 @@ const Visualization = () => {
               </div>
             </>
           ) : (
+            // ... keep existing no variables case
             <Card>
               <CardContent className="py-12 text-center flex flex-col items-center text-muted-foreground">
                 <AlertCircle className="h-10 w-10 mb-4 opacity-20" />
