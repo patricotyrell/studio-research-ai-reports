@@ -136,8 +136,13 @@ const Visualization = () => {
       return;
     }
     
+    console.log('Loading dataset state:', currentState);
     setDatasetState(currentState);
     setVariables(currentState.variables);
+    
+    // Reset primary and secondary variables when variables change
+    setPrimaryVariable('');
+    setSecondaryVariable('');
     
     // Set default variables when variables are loaded
     if (currentState.variables.length > 0) {
@@ -151,7 +156,7 @@ const Visualization = () => {
         setPrimaryVariable(currentState.variables[0].name);
       }
       
-      if (numericVar) {
+      if (numericVar && currentState.variables.length > 1) {
         setSecondaryVariable(numericVar);
       } else if (currentState.variables.length > 1) {
         setSecondaryVariable(currentState.variables[1].name);
@@ -742,7 +747,7 @@ const Visualization = () => {
                            explorationMode === 'relationship' ? 'First variable:' : 
                            'Grouping variable:'}
                         </Label>
-                        <Select value={primaryVariable} onValueChange={setPrimaryVariable}>
+                        <Select value={primaryVariable} onValueChange={setPrimaryVariable} key={`primary-${variables.length}-${datasetState?.hasBeenPrepared}`}>
                           <SelectTrigger id="primary-variable">
                             <SelectValue placeholder="Select variable" />
                           </SelectTrigger>
@@ -761,7 +766,7 @@ const Visualization = () => {
                           <Label htmlFor="secondary-variable">
                             {explorationMode === 'relationship' ? 'Second variable:' : 'Measure to compare:'}
                           </Label>
-                          <Select value={secondaryVariable} onValueChange={setSecondaryVariable}>
+                          <Select value={secondaryVariable} onValueChange={setSecondaryVariable} key={`secondary-${variables.length}-${datasetState?.hasBeenPrepared}`}>
                             <SelectTrigger id="secondary-variable">
                               <SelectValue placeholder="Select variable" />
                             </SelectTrigger>
