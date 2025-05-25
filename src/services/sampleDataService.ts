@@ -1,4 +1,3 @@
-
 // Types
 export interface DataVariable {
   name: string;
@@ -6,8 +5,8 @@ export interface DataVariable {
   missing: number;
   unique: number;
   example: string;
-  missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore';
-  coding?: { [key: string]: number | null };
+  coding?: { [key: string]: number }; // For categorical variables
+  originalCategories?: string[]; // Store original category labels
 }
 
 export interface DataRow {

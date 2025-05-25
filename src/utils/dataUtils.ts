@@ -1,4 +1,3 @@
-
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 
 // Helper function to check if in demo mode
@@ -197,13 +196,23 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
             // Basic date pattern check
             type = 'date';
           }
+
+          // For categorical variables, create a mapping of original labels to numeric codes
+          const coding: { [key: string]: number } = {};
+          if (type === 'categorical') {
+            uniqueValues.forEach((value, index) => {
+              coding[value] = index;
+            });
+          }
           
           return {
             name: header,
             type,
             missing: missingCount,
             unique: uniqueValues.length,
-            example: values[0] || 'N/A'
+            example: values[0] || 'N/A',
+            coding: type === 'categorical' ? coding : undefined,
+            originalCategories: type === 'categorical' ? uniqueValues : undefined
           };
         });
         
@@ -339,15 +348,19 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'recodeVariables':
-      // Update variable types and names if recoded
+      // Update variable types and names if recoded, but preserve original categories
       if (changes.recodedVariables) {
         changes.recodedVariables.forEach((recode: any) => {
           const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
           if (varIndex >= 0) {
+            const originalVar = updatedVars[varIndex];
             updatedVars[varIndex] = {
-              ...updatedVars[varIndex],
+              ...originalVar,
               name: recode.newName || recode.originalName,
-              type: recode.newType || updatedVars[varIndex].type
+              type: recode.newType || originalVar.type,
+              // Preserve original categories and update coding if provided
+              coding: recode.newCoding || originalVar.coding,
+              originalCategories: originalVar.originalCategories || originalVar.coding ? Object.keys(originalVar.coding) : undefined
             };
           }
         });

@@ -222,15 +222,19 @@ const Visualization = () => {
     
     if (explorationMode === 'distribution') {
       if (primaryVariable && getVariableType(primaryVariable) === 'categorical') {
-        // Generate categorical distribution data
-        newChartData = [
-          { name: 'Category A', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
-          { name: 'Category B', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
-          { name: 'Category C', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
-          { name: 'Category D', value: Math.floor(Math.random() * 40) + 10, count: Math.floor(Math.random() * 50) + 20 },
-        ];
+        // Get actual categories from the dataset
+        const primaryVar = variables.find(v => v.name === primaryVariable);
+        const actualCategories = primaryVar?.originalCategories || 
+                                (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
         
-        // Also generate frequency table data
+        // Generate categorical distribution data using actual categories
+        newChartData = actualCategories.slice(0, 6).map(category => ({
+          name: category,
+          value: Math.floor(Math.random() * 40) + 10,
+          count: Math.floor(Math.random() * 50) + 20
+        }));
+        
+        // Also generate frequency table data with actual categories
         setFrequencyTableData(calculateFrequencyDistribution([], primaryVariable, 'categorical'));
       } else {
         // Generate numeric distribution data (histogram)
@@ -256,14 +260,28 @@ const Visualization = () => {
           });
         }
       } else {
-        newChartData = [
-          { name: 'Jan', value: Math.floor(Math.random() * 100) },
-          { name: 'Feb', value: Math.floor(Math.random() * 100) },
-          { name: 'Mar', value: Math.floor(Math.random() * 100) },
-          { name: 'Apr', value: Math.floor(Math.random() * 100) },
-          { name: 'May', value: Math.floor(Math.random() * 100) },
-          { name: 'Jun', value: Math.floor(Math.random() * 100) },
-        ];
+        // For line charts or bar charts in relationship mode
+        if (getVariableType(primaryVariable) === 'categorical') {
+          // Use actual categories for the primary variable
+          const primaryVar = variables.find(v => v.name === primaryVariable);
+          const actualCategories = primaryVar?.originalCategories || 
+                                  (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
+          
+          newChartData = actualCategories.slice(0, 6).map(category => ({
+            name: category,
+            value: Math.floor(Math.random() * 100)
+          }));
+        } else {
+          // Default to month names for non-categorical relationships
+          newChartData = [
+            { name: 'Jan', value: Math.floor(Math.random() * 100) },
+            { name: 'Feb', value: Math.floor(Math.random() * 100) },
+            { name: 'Mar', value: Math.floor(Math.random() * 100) },
+            { name: 'Apr', value: Math.floor(Math.random() * 100) },
+            { name: 'May', value: Math.floor(Math.random() * 100) },
+            { name: 'Jun', value: Math.floor(Math.random() * 100) },
+          ];
+        }
       }
       
       // Generate crosstab data if both variables are categorical
@@ -274,24 +292,37 @@ const Visualization = () => {
         setCrosstabData(null);
       }
     } else if (explorationMode === 'comparison') {
-      // Generate comparison data
-      newChartData = [
-        { 
-          name: 'Group A', 
+      // Generate comparison data using actual categories
+      if (getVariableType(primaryVariable) === 'categorical') {
+        const primaryVar = variables.find(v => v.name === primaryVariable);
+        const actualCategories = primaryVar?.originalCategories || 
+                                (primaryVar?.coding ? Object.keys(primaryVar.coding) : []);
+        
+        newChartData = actualCategories.slice(0, 4).map(category => ({
+          name: category,
           [secondaryVariable]: Math.floor(Math.random() * 100),
           error: Math.floor(Math.random() * 10) + 5
-        },
-        { 
-          name: 'Group B', 
-          [secondaryVariable]: Math.floor(Math.random() * 100),
-          error: Math.floor(Math.random() * 10) + 5
-        },
-        { 
-          name: 'Group C', 
-          [secondaryVariable]: Math.floor(Math.random() * 100),
-          error: Math.floor(Math.random() * 10) + 5
-        },
-      ];
+        }));
+      } else {
+        // Fallback to generic groups if primary variable isn't categorical
+        newChartData = [
+          { 
+            name: 'Group A', 
+            [secondaryVariable]: Math.floor(Math.random() * 100),
+            error: Math.floor(Math.random() * 10) + 5
+          },
+          { 
+            name: 'Group B', 
+            [secondaryVariable]: Math.floor(Math.random() * 100),
+            error: Math.floor(Math.random() * 10) + 5
+          },
+          { 
+            name: 'Group C', 
+            [secondaryVariable]: Math.floor(Math.random() * 100),
+            error: Math.floor(Math.random() * 10) + 5
+          },
+        ];
+      }
       
       // Generate crosstab data if both variables are categorical
       if (getVariableType(primaryVariable) === 'categorical' && 

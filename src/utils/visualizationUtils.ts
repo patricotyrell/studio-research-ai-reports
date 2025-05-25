@@ -3,8 +3,29 @@
  * Utility functions for data visualization and AI insights generation
  */
 
+import { getDatasetVariables, getDatasetPreviewRows } from './dataUtils';
+
 type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
+
+/**
+ * Gets the actual categories for a variable from the dataset
+ */
+const getVariableCategories = (variableName: string): string[] => {
+  const variables = getDatasetVariables();
+  const variable = variables.find(v => v.name === variableName);
+  
+  if (variable?.originalCategories) {
+    return variable.originalCategories;
+  } else if (variable?.coding) {
+    return Object.keys(variable.coding);
+  } else {
+    // Fallback: extract unique values from preview data
+    const previewRows = getDatasetPreviewRows();
+    const uniqueValues = [...new Set(previewRows.map(row => row[variableName]).filter(v => v != null))];
+    return uniqueValues.slice(0, 10); // Limit to 10 categories for display
+  }
+};
 
 /**
  * Generates AI insights for a chart based on the data and variables
@@ -80,17 +101,16 @@ export const generateChartInsights = (
 };
 
 /**
- * Calculates frequency distribution table data
+ * Calculates frequency distribution table data using actual dataset categories
  */
 export const calculateFrequencyDistribution = (
   data: any[],
   variableName: string,
   variableType: string
 ): { category: string; frequency: number; percentage: number }[] => {
-  // This is a mock implementation - in a real app, this would use actual data
   if (variableType === 'categorical') {
-    const categories = ['Category A', 'Category B', 'Category C', 'Category D'];
-    const total = 100;
+    const categories = getVariableCategories(variableName);
+    const total = 100; // Mock total for demo
     
     return categories.map(cat => {
       const frequency = Math.floor(Math.random() * 40) + 10;
@@ -117,18 +137,16 @@ export const calculateFrequencyDistribution = (
 };
 
 /**
- * Generate crosstabulation data for two categorical variables
+ * Generate crosstabulation data for two categorical variables using actual categories
  */
 export const generateCrosstabData = (
   data: any[],
   rowVariable: string,
   columnVariable: string
 ) => {
-  // Mock implementation for demo purposes
-  // In a real app, this would calculate actual crosstabs from the dataset
-  
-  const rowValues = ['Yes', 'No', 'Maybe'];
-  const colValues = ['Male', 'Female', 'Other'];
+  // Get actual categories from the dataset
+  const rowValues = getVariableCategories(rowVariable);
+  const colValues = getVariableCategories(columnVariable);
   
   const result = {
     rows: rowValues,
