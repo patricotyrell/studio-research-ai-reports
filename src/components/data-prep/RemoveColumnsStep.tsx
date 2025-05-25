@@ -107,11 +107,6 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
     });
   };
   
-  const handleComplete = () => {
-    onComplete(completedAutomatic);
-    onNext();
-  };
-  
   const removalCandidates = variables.filter(v => v.removalReason);
 
   if (showGuidance) {
@@ -129,6 +124,7 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Trash className="h-6 w-6 text-red-500" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -140,10 +136,14 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
       <StepFlow
         title="Columns Removed"
         description="AI has removed unnecessary columns from your analysis."
-        onComplete={handleComplete}
-        onBack={() => setShowGuidance(true)}
+        onComplete={() => {
+          onComplete(true);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -193,11 +193,14 @@ const RemoveColumnsStep: React.FC<RemoveColumnsStepProps> = ({
       <StepFlow
         title="Remove Columns"
         description="Select variables to remove from your analysis."
-        onComplete={handleComplete}
-        onCancel={() => setShowGuidance(true)}
-        onBack={showBackButton ? onBack : undefined}
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>

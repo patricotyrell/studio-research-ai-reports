@@ -155,13 +155,26 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({
   // If there are no potential composite scores, show a message and allow skipping
   if (detectedScales.length === 0) {
     return (
-      <Alert className="mb-6 bg-blue-50 border-blue-200">
-        <Info className="h-4 w-4 text-blue-600" />
-        <AlertTitle>No Potential Scales Detected</AlertTitle>
-        <AlertDescription>
-          We didn't find any related question groups that could be combined into composite scores.
-        </AlertDescription>
-      </Alert>
+      <StepFlow
+        title="Create Composite Scores"
+        description="No potential scales detected that could be combined into composite scores."
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
+        completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
+      >
+        <Alert className="mb-6 bg-blue-50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertTitle>No Potential Scales Detected</AlertTitle>
+          <AlertDescription>
+            We didn't find any related question groups that could be combined into composite scores.
+          </AlertDescription>
+        </Alert>
+      </StepFlow>
     );
   }
 
@@ -188,10 +201,14 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({
       <StepFlow
         title="Composite Scores Created"
         description="AI has created composite scores from related question groups."
-        onComplete={handleComplete}
-        onBack={() => setShowGuidance(true)}
+        onComplete={() => {
+          onComplete(true);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -243,11 +260,14 @@ const CompositeScoresStep: React.FC<CompositeScoresStepProps> = ({
       <StepFlow
         title="Create Composite Scores"
         description="Create index variables by combining related questions into a single score."
-        onComplete={handleComplete}
-        onCancel={() => setShowGuidance(true)}
-        onBack={showBackButton ? onBack : undefined}
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {detectedScales.map((scale, scaleIndex) => (

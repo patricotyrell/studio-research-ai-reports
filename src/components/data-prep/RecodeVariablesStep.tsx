@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus, Check, AlertTriangle, Info, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
@@ -192,13 +192,26 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
   // If there are no categorical variables, show a message and allow skipping
   if (variables.length === 0) {
     return (
-      <Alert className="mb-6 bg-blue-50 border-blue-200">
-        <Info className="h-4 w-4 text-blue-600" />
-        <AlertTitle>No Categorical Variables Found</AlertTitle>
-        <AlertDescription>
-          We didn't find any categorical variables that can be recoded in your dataset.
-        </AlertDescription>
-      </Alert>
+      <StepFlow
+        title="Recode Variables"
+        description="No categorical variables found that can be recoded in your dataset."
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? onBack : undefined}
+        showBackButton={showBackButton}
+        completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
+      >
+        <Alert className="mb-6 bg-blue-50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertTitle>No Categorical Variables Found</AlertTitle>
+          <AlertDescription>
+            We didn't find any categorical variables that can be recoded in your dataset.
+          </AlertDescription>
+        </Alert>
+      </StepFlow>
     );
   }
   
@@ -231,10 +244,14 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
       <StepFlow
         title="Variables Recoded"
         description="AI has automatically recoded categorical variables to standardize categories."
-        onComplete={handleComplete}
-        onBack={handleBackToGuidance}
+        onComplete={() => {
+          onComplete(true);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -281,11 +298,14 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
       <StepFlow
         title="Recode Variables"
         description="Review and update category names and numeric codes for your categorical variables."
-        onComplete={handleComplete}
-        onCancel={() => setShowGuidance(true)}
-        onBack={showBackButton ? onBack : undefined}
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <div className="space-y-8">
           {variables.map((variable, varIndex) => (

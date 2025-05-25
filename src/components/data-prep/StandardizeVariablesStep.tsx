@@ -154,6 +154,7 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
         onManual={handleManualReview}
         actionInProgress={processingAutomatic}
         icon={<Wand2 className="h-6 w-6 text-blue-600" />}
+        onSkipToSummary={onSkipToSummary}
       />
     );
   }
@@ -165,10 +166,14 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
       <StepFlow
         title="Variable Names Standardized"
         description="AI has standardized your variable names for clarity."
-        onComplete={handleComplete}
-        onBack={() => setShowGuidance(true)}
+        onComplete={() => {
+          onComplete(true);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
+        onSkipToSummary={onSkipToSummary}
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
           <Check className="h-4 w-4 text-green-600" />
@@ -211,11 +216,14 @@ const StandardizeVariablesStep: React.FC<StandardizeVariablesStepProps> = ({
       <StepFlow
         title="Standardize Variable Names"
         description="Update variable names for clarity in analysis and reporting."
-        onComplete={handleComplete}
-        onCancel={() => setShowGuidance(true)}
-        onBack={showBackButton ? onBack : undefined}
+        onComplete={() => {
+          onComplete(false);
+          onNext();
+        }}
+        onBack={showBackButton ? () => setShowGuidance(true) : undefined}
         showBackButton={showBackButton}
         completeButtonText="Apply & Continue"
+        onSkipToSummary={onSkipToSummary}
       >
         <Table>
           <TableHeader>
