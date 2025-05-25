@@ -2,22 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import StepIndicator from '@/components/StepIndicator';
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import AnalysisIntentSelector from '@/components/analysis/AnalysisIntentSelector';
+import AnalysisVariableSelector from '@/components/analysis/AnalysisVariableSelector';
+import TestSelector from '@/components/analysis/TestSelector';
+import AnalysisResults from '@/components/analysis/AnalysisResults';
+import { getCleanedData } from '@/utils/dataUtils';
+
+type AnalysisIntent = 'distribution' | 'relationship' | 'comparison';
 
 interface Variable {
   name: string;
@@ -33,16 +29,27 @@ interface AnalysisResult {
   pValue: number;
   significant: boolean;
   statistic: number;
+  degreesOfFreedom?: number;
+  effectSize?: number;
   interpretation: string;
+  testSummary: {
+    statistic: number;
+    pValue: number;
+    degreesOfFreedom?: number;
+    effectSize?: number;
+    confidenceInterval?: [number, number];
+  };
 }
 
 const Analysis = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [variables, setVariables] = useState<Variable[]>([]);
-  const [groupingVariable, setGroupingVariable] = useState<string>('');
-  const [outcomeVariable, setOutcomeVariable] = useState<string>('');
-  const [testType, setTestType] = useState<string>('automatic');
+  const [analysisIntent, setAnalysisIntent] = useState<AnalysisIntent>('distribution');
+  const [firstVariable, setFirstVariable] = useState<string>('');
+  const [secondVariable, setSecondVariable] = useState<string>('');
+  const [testSelectionMode, setTestSelectionMode] = useState<'auto' | 'manual'>('auto');
+  const [selectedTest, setSelectedTest] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   
@@ -60,13 +67,35 @@ const Analysis = () => {
       return;
     }
 
-    // In a real app, we would fetch the prepared variables
-    // For now, we'll use synthetic data
-    loadSyntheticVariables();
+    loadVariables();
   }, [navigate]);
 
-  const loadSyntheticVariables = () => {
-    // Generate synthetic variable data for demonstration
+  const loadVariables = () => {
+    try {
+      // Try to get cleaned data first, fall back to sample data
+      const cleanedData = getCleanedData();
+      if (cleanedData && cleanedData.length > 0) {
+        const generatedVariables = Object.keys(cleanedData[0]).map(key => {
+          const values = cleanedData.map(row => row[key]).filter(v => v !== null && v !== undefined);
+          const uniqueValues = new Set(values).size;
+          const isNumeric = values.every(v => !isNaN(Number(v)));
+          
+          return {
+            name: key,
+            type: isNumeric ? 'numeric' as const : 'categorical' as const,
+            missing: cleanedData.length - values.length,
+            unique: uniqueValues,
+            example: String(values[0] || '')
+          };
+        });
+        setVariables(generatedVariables);
+        return;
+      }
+    } catch (error) {
+      console.log('No cleaned data found, using sample variables');
+    }
+
+    // Fallback to sample variables
     const syntheticVariables: Variable[] = [
       { name: 'age', type: 'numeric', missing: 0, unique: 45, example: '32' },
       { name: 'gender', type: 'categorical', missing: 0, unique: 3, example: 'Female' },
@@ -79,40 +108,21 @@ const Analysis = () => {
     
     setVariables(syntheticVariables);
     
-    // Suggest initial variables
+    // Set initial suggestions
     if (syntheticVariables.find(v => v.name === 'gender')) {
-      setGroupingVariable('gender');
+      setFirstVariable('gender');
     }
     
     if (syntheticVariables.find(v => v.name === 'satisfaction')) {
-      setOutcomeVariable('satisfaction');
+      setSecondVariable('satisfaction');
     }
-  };
-
-  const getAppropriateTests = () => {
-    const groupVar = variables.find(v => v.name === groupingVariable);
-    const outVar = variables.find(v => v.name === outcomeVariable);
-    
-    if (!groupVar || !outVar) return [];
-    
-    // Logic to suggest appropriate tests based on variable types
-    if (groupVar.type === 'categorical' && outVar.type === 'numeric') {
-      if (groupVar.unique <= 2) return ['t-test', 'mann-whitney'];
-      else return ['anova', 'kruskal-wallis'];
-    } else if (groupVar.type === 'categorical' && outVar.type === 'categorical') {
-      return ['chi-square', 'fisher-exact'];
-    } else if (groupVar.type === 'numeric' && outVar.type === 'numeric') {
-      return ['correlation', 'regression'];
-    }
-    
-    return ['custom'];
   };
 
   const runAnalysis = () => {
-    if (!groupingVariable || !outcomeVariable) {
+    if (!firstVariable || (analysisIntent !== 'distribution' && !secondVariable)) {
       toast({
         title: "Variables required",
-        description: "Please select both grouping and outcome variables",
+        description: "Please select the required variables for analysis",
         variant: "destructive",
       });
       return;
@@ -122,38 +132,106 @@ const Analysis = () => {
     
     // Simulate API call with timeout
     setTimeout(() => {
-      // Generate synthetic analysis result
-      const groupVar = variables.find(v => v.name === groupingVariable);
-      const outVar = variables.find(v => v.name === outcomeVariable);
+      const firstVar = variables.find(v => v.name === firstVariable);
+      const secondVar = variables.find(v => v.name === secondVariable);
       
       let mockResult: AnalysisResult;
       
-      if (groupVar?.type === 'categorical' && outVar?.type === 'numeric') {
+      if (analysisIntent === 'distribution') {
+        if (firstVar?.type === 'categorical') {
+          mockResult = {
+            type: 'Frequency Analysis',
+            description: `Frequency distribution analysis of ${firstVariable}`,
+            pValue: 0.0,
+            significant: true,
+            statistic: 0,
+            interpretation: `The frequency analysis of ${firstVariable} shows the distribution of categories. The most common category represents the modal value in your dataset.`,
+            testSummary: {
+              statistic: 0,
+              pValue: 0.0,
+            }
+          };
+        } else {
+          mockResult = {
+            type: 'Normality Test (Shapiro-Wilk)',
+            description: `Testing normality of ${firstVariable} distribution`,
+            pValue: 0.034,
+            significant: true,
+            statistic: 0.94,
+            interpretation: `The Shapiro-Wilk test indicates that ${firstVariable} does not follow a normal distribution (W = 0.94, p = 0.034). Consider using non-parametric tests for further analysis.`,
+            testSummary: {
+              statistic: 0.94,
+              pValue: 0.034,
+            }
+          };
+        }
+      } else if (analysisIntent === 'comparison' && firstVar?.type === 'categorical' && secondVar?.type === 'numeric') {
+        if (firstVar.unique <= 2) {
+          mockResult = {
+            type: 'Independent Samples T-test',
+            description: `Comparing ${secondVariable} across ${firstVariable} groups`,
+            pValue: 0.023,
+            significant: true,
+            statistic: 2.34,
+            degreesOfFreedom: 98,
+            effectSize: 0.47,
+            interpretation: `There is a statistically significant difference in ${secondVariable} between ${firstVariable} groups (t(98) = 2.34, p = 0.023, Cohen's d = 0.47). This represents a medium effect size, suggesting meaningful practical differences.`,
+            testSummary: {
+              statistic: 2.34,
+              pValue: 0.023,
+              degreesOfFreedom: 98,
+              effectSize: 0.47,
+              confidenceInterval: [0.12, 1.86]
+            }
+          };
+        } else {
+          mockResult = {
+            type: 'One-way ANOVA',
+            description: `Comparing ${secondVariable} across multiple ${firstVariable} groups`,
+            pValue: 0.012,
+            significant: true,
+            statistic: 4.83,
+            degreesOfFreedom: 2,
+            effectSize: 0.23,
+            interpretation: `There is a statistically significant difference in ${secondVariable} across ${firstVariable} groups (F(2,97) = 4.83, p = 0.012, η² = 0.23). Post-hoc tests are recommended to identify which specific groups differ.`,
+            testSummary: {
+              statistic: 4.83,
+              pValue: 0.012,
+              degreesOfFreedom: 2,
+              effectSize: 0.23
+            }
+          };
+        }
+      } else if (analysisIntent === 'relationship' && firstVar?.type === 'numeric' && secondVar?.type === 'numeric') {
         mockResult = {
-          type: 't-test',
-          description: `Independent samples t-test comparing ${outcomeVariable} across ${groupingVariable} groups`,
-          pValue: 0.023,
-          significant: true,
-          statistic: 2.34,
-          interpretation: `There is a statistically significant difference in ${outcomeVariable} between ${groupingVariable} groups (t = 2.34, p = 0.023). This suggests that ${groupingVariable} has a meaningful impact on ${outcomeVariable}.`
-        };
-      } else if (groupVar?.type === 'categorical' && outVar?.type === 'categorical') {
-        mockResult = {
-          type: 'chi-square',
-          description: `Chi-square test of independence between ${groupingVariable} and ${outcomeVariable}`,
-          pValue: 0.047,
-          significant: true,
-          statistic: 9.65,
-          interpretation: `There is a statistically significant relationship between ${groupingVariable} and ${outcomeVariable} (χ² = 9.65, p = 0.047). This suggests that these variables are not independent of each other.`
-        };
-      } else {
-        mockResult = {
-          type: 'correlation',
-          description: `Pearson correlation between ${groupingVariable} and ${outcomeVariable}`,
+          type: 'Pearson Correlation',
+          description: `Correlation analysis between ${firstVariable} and ${secondVariable}`,
           pValue: 0.002,
           significant: true,
           statistic: 0.56,
-          interpretation: `There is a moderately strong positive correlation between ${groupingVariable} and ${outcomeVariable} (r = 0.56, p = 0.002). This suggests that as ${groupingVariable} increases, ${outcomeVariable} tends to increase as well.`
+          degreesOfFreedom: 98,
+          interpretation: `There is a moderately strong positive correlation between ${firstVariable} and ${secondVariable} (r(98) = 0.56, p = 0.002). This suggests that as ${firstVariable} increases, ${secondVariable} tends to increase as well.`,
+          testSummary: {
+            statistic: 0.56,
+            pValue: 0.002,
+            degreesOfFreedom: 98,
+            confidenceInterval: [0.21, 0.78]
+          }
+        };
+      } else {
+        mockResult = {
+          type: 'Chi-square Test of Independence',
+          description: `Testing independence between ${firstVariable} and ${secondVariable}`,
+          pValue: 0.047,
+          significant: true,
+          statistic: 9.65,
+          degreesOfFreedom: 4,
+          interpretation: `There is a statistically significant relationship between ${firstVariable} and ${secondVariable} (χ²(4) = 9.65, p = 0.047). These variables are not independent of each other.`,
+          testSummary: {
+            statistic: 9.65,
+            pValue: 0.047,
+            degreesOfFreedom: 4
+          }
         };
       }
       
@@ -167,32 +245,32 @@ const Analysis = () => {
     }, 1500);
   };
 
-  const handleContinue = () => {
-    // Save analysis result to localStorage
+  const handleDownloadResults = () => {
+    toast({
+      title: "Download started",
+      description: "Results are being prepared for download",
+    });
+  };
+
+  const handleAddToReport = () => {
     if (analysisResult) {
       localStorage.setItem('analysisResult', JSON.stringify(analysisResult));
+      toast({
+        title: "Added to report",
+        description: "Analysis results have been added to your report",
+      });
     }
+  };
+
+  const handleContinue = () => {
     navigate('/visualization');
   };
 
-  const getCategoryLabel = (type: string) => {
-    switch (type) {
-      case 'categorical': return 'Categorical';
-      case 'numeric': return 'Numeric';
-      case 'text': return 'Text';
-      case 'date': return 'Date';
-      default: return type;
+  const canRunAnalysis = () => {
+    if (analysisIntent === 'distribution') {
+      return firstVariable !== '';
     }
-  };
-
-  const getCategoryColor = (type: string) => {
-    switch (type) {
-      case 'categorical': return 'bg-purple-100 text-purple-800';
-      case 'numeric': return 'bg-green-100 text-green-800';
-      case 'text': return 'bg-blue-100 text-blue-800';
-      case 'date': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    return firstVariable !== '' && secondVariable !== '';
   };
 
   return (
@@ -203,7 +281,7 @@ const Analysis = () => {
           steps={['Upload', 'Overview', 'Preparation', 'Analysis', 'Visualization', 'Report']} 
         />
         
-        <div className="max-w-5xl mx-auto mt-6">
+        <div className="max-w-4xl mx-auto mt-6">
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-research-900 mb-2">Analysis</h1>
@@ -213,188 +291,94 @@ const Analysis = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Variable selection card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Select Variables</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="grouping-var">Grouping Variable</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Choose a variable to group your data (e.g., Gender, Age Group)
-                  </p>
-                  <Select
-                    value={groupingVariable}
-                    onValueChange={setGroupingVariable}
-                  >
-                    <SelectTrigger id="grouping-var">
-                      <SelectValue placeholder="Select variable" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {variables
-                        .filter(v => v.type === 'categorical' || v.type === 'numeric')
-                        .map(variable => (
-                          <SelectItem key={variable.name} value={variable.name}>
-                            {variable.name} 
-                            <Badge className={`ml-2 ${getCategoryColor(variable.type)}`}>
-                              {getCategoryLabel(variable.type)}
-                            </Badge>
-                          </SelectItem>
-                        ))
-                      }
-                    </SelectContent>
-                  </Select>
-                </div>
+          {/* Step 1: Analysis Intent */}
+          <Card className="mb-6">
+            <AnalysisIntentSelector
+              analysisIntent={analysisIntent}
+              onAnalysisIntentChange={(intent) => {
+                setAnalysisIntent(intent);
+                setFirstVariable('');
+                setSecondVariable('');
+                setAnalysisResult(null);
+              }}
+            />
+          </Card>
 
-                <div className="space-y-2">
-                  <Label htmlFor="outcome-var">Outcome Variable</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Choose a variable to measure (e.g., Satisfaction, Score)
-                  </p>
-                  <Select
-                    value={outcomeVariable}
-                    onValueChange={setOutcomeVariable}
-                  >
-                    <SelectTrigger id="outcome-var">
-                      <SelectValue placeholder="Select variable" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {variables
-                        .filter(v => v.type === 'categorical' || v.type === 'numeric')
-                        .map(variable => (
-                          <SelectItem key={variable.name} value={variable.name}>
-                            {variable.name}
-                            <Badge className={`ml-2 ${getCategoryColor(variable.type)}`}>
-                              {getCategoryLabel(variable.type)}
-                            </Badge>
-                          </SelectItem>
-                        ))
-                      }
-                    </SelectContent>
-                  </Select>
-                </div>
+          {/* Step 2: Variable Selection */}
+          <Card className="mb-6">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Select Variables</h3>
+              <AnalysisVariableSelector
+                analysisIntent={analysisIntent}
+                firstVariable={firstVariable}
+                secondVariable={secondVariable}
+                variables={variables}
+                onFirstVariableChange={setFirstVariable}
+                onSecondVariableChange={setSecondVariable}
+              />
+            </div>
+          </Card>
 
-                {groupingVariable && outcomeVariable && (
-                  <div className="space-y-2 pt-4">
-                    <Label>Statistical Test</Label>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Choose how to determine the appropriate statistical test
-                    </p>
-                    <RadioGroup 
-                      value={testType} 
-                      onValueChange={setTestType}
-                      className="flex flex-col space-y-2"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="automatic" id="automatic" />
-                        <Label htmlFor="automatic" className="cursor-pointer">Automatic (recommended)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="manual" id="manual" />
-                        <Label htmlFor="manual" className="cursor-pointer">I'll select the test manually</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                )}
-
-                {testType === 'automatic' && groupingVariable && outcomeVariable && (
-                  <div className="pt-4">
-                    <p className="text-sm font-medium">Recommended tests:</p>
-                    <div className="mt-2 space-y-2">
-                      {getAppropriateTests().map(test => (
-                        <div 
-                          key={test} 
-                          className="flex items-center p-2 border rounded-md bg-gray-50"
-                        >
-                          <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                          <span className="capitalize">{test.replace('-', ' ')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
+          {/* Step 3: Test Selection */}
+          {canRunAnalysis() && (
+            <Card className="mb-6">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Test Selection</h3>
+                <TestSelector
+                  analysisIntent={analysisIntent}
+                  firstVariable={firstVariable}
+                  secondVariable={secondVariable}
+                  variables={variables}
+                  testSelectionMode={testSelectionMode}
+                  selectedTest={selectedTest}
+                  onTestSelectionModeChange={setTestSelectionMode}
+                  onSelectedTestChange={setSelectedTest}
+                />
+                
                 <Button 
                   onClick={runAnalysis} 
-                  className="w-full mt-4 bg-research-700 hover:bg-research-800"
-                  disabled={!groupingVariable || !outcomeVariable || isAnalyzing}
+                  className="w-full mt-6 bg-research-700 hover:bg-research-800"
+                  disabled={isAnalyzing}
                 >
-                  {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
+                  {isAnalyzing ? 'Running Analysis...' : 'Run Analysis'}
                 </Button>
-              </CardContent>
+              </div>
             </Card>
+          )}
 
-            {/* Analysis results card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Analysis Results</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isAnalyzing ? (
-                  <div className="py-10 text-center">
-                    <p className="mb-4 text-muted-foreground">Running statistical analysis...</p>
-                    <Progress value={65} className="mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Please wait while we process your data
-                    </p>
-                  </div>
-                ) : analysisResult ? (
-                  <div className="space-y-4">
-                    <div className="border rounded-md p-4 bg-gray-50">
-                      <p className="font-medium mb-2">Test: {analysisResult.type}</p>
-                      <p className="text-sm text-gray-600 mb-4">{analysisResult.description}</p>
-                      
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="border rounded p-3 bg-white">
-                          <p className="text-xs text-gray-500">p-value</p>
-                          <p className="font-mono font-bold">{analysisResult.pValue}</p>
-                        </div>
-                        <div className="border rounded p-3 bg-white">
-                          <p className="text-xs text-gray-500">Test statistic</p>
-                          <p className="font-mono font-bold">{analysisResult.statistic}</p>
-                        </div>
-                      </div>
-                      
-                      <div className={`p-3 rounded-md ${analysisResult.significant ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                        <div className="flex items-center gap-2">
-                          {analysisResult.significant ? (
-                            <>
-                              <CheckCircle className="h-5 w-5 text-green-600" />
-                              <p className="font-medium text-green-800">Statistically Significant</p>
-                            </>
-                          ) : (
-                            <>
-                              <Info className="h-5 w-5 text-amber-600" />
-                              <p className="font-medium text-amber-800">Not Statistically Significant</p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="font-medium mb-2">Interpretation</h3>
-                      <p className="text-gray-700">{analysisResult.interpretation}</p>
-                    </div>
-                    
-                    <Button 
-                      onClick={handleContinue} 
-                      className="w-full mt-2 bg-research-700 hover:bg-research-800"
-                    >
-                      Continue to Visualization
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="py-12 text-center flex flex-col items-center text-muted-foreground">
-                    <AlertCircle className="h-10 w-10 mb-4 opacity-20" />
-                    <p>Select variables and run analysis to see results</p>
-                  </div>
-                )}
-              </CardContent>
+          {/* Step 4: Results */}
+          {isAnalyzing && (
+            <Card className="mb-6">
+              <div className="p-6">
+                <div className="py-10 text-center">
+                  <p className="mb-4 text-muted-foreground">Running statistical analysis...</p>
+                  <Progress value={65} className="mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Please wait while we process your data
+                  </p>
+                </div>
+              </div>
             </Card>
-          </div>
+          )}
+
+          {analysisResult && (
+            <div className="space-y-6">
+              <AnalysisResults
+                result={analysisResult}
+                onDownloadResults={handleDownloadResults}
+                onAddToReport={handleAddToReport}
+              />
+              
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleContinue} 
+                  className="bg-research-700 hover:bg-research-800"
+                >
+                  Continue to Visualization
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
