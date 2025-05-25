@@ -112,24 +112,24 @@ const DataOverview = () => {
             </Button>
           </div>
           
-          {/* File Summary */}
+          {/* File Summary - Made more compact */}
           <Card className="mb-6">
-            <CardHeader className="py-4 px-6">
-              <CardTitle className="text-lg">File Summary</CardTitle>
+            <CardHeader className="py-3 px-6">
+              <CardTitle className="text-base">File Summary</CardTitle>
             </CardHeader>
-            <CardContent className="py-4 px-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <CardContent className="py-3 px-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">File</p>
-                  <p className="font-medium">{fileInfo.name}</p>
+                  <p className="text-xs text-gray-500 mb-1">File</p>
+                  <p className="font-medium text-sm">{fileInfo.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Rows</p>
-                  <p className="font-medium">{fileInfo.rows}</p>
+                  <p className="text-xs text-gray-500 mb-1">Rows</p>
+                  <p className="font-medium text-sm">{fileInfo.rows}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Columns</p>
-                  <p className="font-medium">{fileInfo.columns}</p>
+                  <p className="text-xs text-gray-500 mb-1">Columns</p>
+                  <p className="font-medium text-sm">{fileInfo.columns}</p>
                 </div>
               </div>
             </CardContent>
