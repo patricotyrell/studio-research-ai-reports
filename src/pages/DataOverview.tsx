@@ -8,8 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import StepIndicator from '@/components/StepIndicator';
 import PaginatedDataPreview from '@/components/PaginatedDataPreview';
+import DataQualityChecks from '@/components/DataQualityChecks';
 import { CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getCurrentProject } from '@/utils/dataUtils';
+import { getDatasetPreviewRows } from '@/utils/dataUtils';
+import { analyzeDataQuality, DataQualityReport } from '@/services/dataQualityService';
 
 interface Column {
   name: string;
@@ -24,6 +27,7 @@ const DataOverview = () => {
   const [fileInfo, setFileInfo] = useState<any | null>(null);
   const [projectInfo, setProjectInfo] = useState<any | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
+  const [qualityReport, setQualityReport] = useState<DataQualityReport | null>(null);
   
   // Check if user is logged in and has a current file
   useEffect(() => {
@@ -46,8 +50,14 @@ const DataOverview = () => {
     
     // Get variables from sample data or user uploaded file
     const variables = getDatasetVariables();
+    const previewRows = getDatasetPreviewRows();
+    
     if (variables.length > 0) {
       setColumns(variables);
+      
+      // Perform data quality analysis
+      const report = analyzeDataQuality(variables, previewRows);
+      setQualityReport(report);
     } else {
       generateSyntheticColumns();
     }
@@ -70,6 +80,11 @@ const DataOverview = () => {
   
   const handleContinue = () => {
     navigate('/data-preparation');
+  };
+  
+  const handleFixIssue = (issueId: string) => {
+    // Navigate to data preparation with focus on specific issue
+    navigate('/data-preparation', { state: { focusIssue: issueId } });
   };
   
   if (!fileInfo) {
@@ -188,61 +203,15 @@ const DataOverview = () => {
             <PaginatedDataPreview />
           </div>
           
-          {/* Data Quality Checks */}
-          <Card>
-            <CardHeader className="py-4 px-6">
-              <CardTitle className="text-lg">Data Quality Checks</CardTitle>
-            </CardHeader>
-            <CardContent className="py-4 px-6">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                  <span className="text-sm">No major data quality issues detected.</span>
-                </div>
-                
-                {totalMissingValues === 0 ? (
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                    <span className="text-sm">No missing values detected.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                    <span className="text-sm">{totalMissingValues} missing values found across dataset.</span>
-                  </div>
-                )}
-                
-                {hasNoDuplicates ? (
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                    <span className="text-sm">No duplicate rows found.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                    <span className="text-sm">Duplicate rows detected.</span>
-                  </div>
-                )}
-                
-                {hasConsistentValues && (
-                  <div className="flex items-center gap-3">
-                    <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                    <span className="text-sm">Categorical variables detected - check for consistency in Data Preparation.</span>
-                  </div>
-                )}
-                
-                <div className="mt-4 pt-4 border-t">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => navigate('/data-preparation')}
-                  >
-                    View Details in Data Preparation
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Enhanced Data Quality Checks */}
+          {qualityReport && (
+            <div className="mb-6">
+              <DataQualityChecks 
+                qualityReport={qualityReport}
+                onFixIssue={handleFixIssue}
+              />
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
