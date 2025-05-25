@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -11,7 +10,7 @@ import AnalysisIntentSelector from '@/components/analysis/AnalysisIntentSelector
 import AnalysisVariableSelector from '@/components/analysis/AnalysisVariableSelector';
 import TestSelector from '@/components/analysis/TestSelector';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
-import { getCleanedData } from '@/utils/dataUtils';
+import { getDatasetVariables } from '@/utils/dataUtils';
 
 type AnalysisIntent = 'distribution' | 'relationship' | 'comparison';
 
@@ -72,30 +71,30 @@ const Analysis = () => {
 
   const loadVariables = () => {
     try {
-      // Try to get cleaned data first, fall back to sample data
-      const cleanedData = getCleanedData();
-      if (cleanedData && cleanedData.length > 0) {
-        const generatedVariables = Object.keys(cleanedData[0]).map(key => {
-          const values = cleanedData.map(row => row[key]).filter(v => v !== null && v !== undefined);
-          const uniqueValues = new Set(values).size;
-          const isNumeric = values.every(v => !isNaN(Number(v)));
-          
-          return {
-            name: key,
-            type: isNumeric ? 'numeric' as const : 'categorical' as const,
-            missing: cleanedData.length - values.length,
-            unique: uniqueValues,
-            example: String(values[0] || '')
-          };
-        });
-        setVariables(generatedVariables);
+      // Get variables from the current dataset (prepared or original)
+      const datasetVariables = getDatasetVariables();
+      if (datasetVariables && datasetVariables.length > 0) {
+        setVariables(datasetVariables);
+        
+        // Set initial suggestions based on available variables
+        const categoricalVar = datasetVariables.find(v => v.type === 'categorical');
+        const numericVar = datasetVariables.find(v => v.type === 'numeric');
+        
+        if (categoricalVar) {
+          setFirstVariable(categoricalVar.name);
+        }
+        
+        if (numericVar) {
+          setSecondVariable(numericVar.name);
+        }
+        
         return;
       }
     } catch (error) {
-      console.log('No cleaned data found, using sample variables');
+      console.log('Error loading dataset variables:', error);
     }
 
-    // Fallback to sample variables
+    // Fallback to sample variables if no dataset is available
     const syntheticVariables: Variable[] = [
       { name: 'age', type: 'numeric', missing: 0, unique: 45, example: '32' },
       { name: 'gender', type: 'categorical', missing: 0, unique: 3, example: 'Female' },
