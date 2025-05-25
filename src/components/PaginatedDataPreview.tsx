@@ -33,7 +33,7 @@ const PaginatedDataPreview: React.FC = () => {
   return (
     <Card>
       <CardHeader className="py-4 px-6">
-        <CardTitle className="text-lg">Data Preview (first 5 rows)</CardTitle>
+        <CardTitle className="text-lg">Data Preview</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
@@ -46,11 +46,11 @@ const PaginatedDataPreview: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentRows.slice(0, 5).map((row, rowIndex) => (
+              {currentRows.map((row, rowIndex) => (
                 <TableRow key={startIndex + rowIndex}>
                   {columnNames.map((column) => (
                     <TableCell key={`${startIndex + rowIndex}-${column}`} className="py-2">
-                      {row[column] === null ? (
+                      {row[column] === null || row[column] === undefined || row[column] === '' ? (
                         <span className="text-gray-300 italic">null</span>
                       ) : (
                         String(row[column])
