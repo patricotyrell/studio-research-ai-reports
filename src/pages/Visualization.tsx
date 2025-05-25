@@ -137,31 +137,38 @@ const Visualization = () => {
     }
     
     console.log('Loading dataset state:', currentState);
+    console.log('Current variables:', currentState.variables.map(v => ({ name: v.name, type: v.type })));
+    
     setDatasetState(currentState);
     setVariables(currentState.variables);
     
-    // Reset primary and secondary variables when variables change
+    // Always reset selections when loading new dataset state to avoid mismatched variable names
+    console.log('Resetting variable selections due to dataset state change');
     setPrimaryVariable('');
     setSecondaryVariable('');
     
-    // Set default variables when variables are loaded
-    if (currentState.variables.length > 0) {
-      // Find first categorical and numeric variables as defaults
-      const categoricalVar = currentState.variables.find(v => v.type === 'categorical')?.name;
-      const numericVar = currentState.variables.find(v => v.type === 'numeric')?.name;
-      
-      if (categoricalVar) {
-        setPrimaryVariable(categoricalVar);
-      } else {
-        setPrimaryVariable(currentState.variables[0].name);
+    // Set default variables after a brief delay to ensure state is updated
+    setTimeout(() => {
+      if (currentState.variables.length > 0) {
+        // Find first categorical and numeric variables as defaults
+        const categoricalVar = currentState.variables.find(v => v.type === 'categorical')?.name;
+        const numericVar = currentState.variables.find(v => v.type === 'numeric')?.name;
+        
+        console.log('Setting default variables:', { categoricalVar, numericVar });
+        
+        if (categoricalVar) {
+          setPrimaryVariable(categoricalVar);
+        } else {
+          setPrimaryVariable(currentState.variables[0].name);
+        }
+        
+        if (numericVar && currentState.variables.length > 1) {
+          setSecondaryVariable(numericVar);
+        } else if (currentState.variables.length > 1) {
+          setSecondaryVariable(currentState.variables[1].name);
+        }
       }
-      
-      if (numericVar && currentState.variables.length > 1) {
-        setSecondaryVariable(numericVar);
-      } else if (currentState.variables.length > 1) {
-        setSecondaryVariable(currentState.variables[1].name);
-      }
-    }
+    }, 100);
   }, [navigate]);
   
   // Handle exploration mode change and recommend chart type
@@ -747,13 +754,20 @@ const Visualization = () => {
                            explorationMode === 'relationship' ? 'First variable:' : 
                            'Grouping variable:'}
                         </Label>
-                        <Select value={primaryVariable} onValueChange={setPrimaryVariable} key={`primary-${variables.length}-${datasetState?.hasBeenPrepared}`}>
+                        <Select 
+                          value={primaryVariable} 
+                          onValueChange={(value) => {
+                            console.log('Primary variable changed to:', value);
+                            setPrimaryVariable(value);
+                          }}
+                          key={`primary-${variables.length}-${JSON.stringify(variables.map(v => v.name))}`}
+                        >
                           <SelectTrigger id="primary-variable">
                             <SelectValue placeholder="Select variable" />
                           </SelectTrigger>
                           <SelectContent>
                             {variables.map(variable => (
-                              <SelectItem key={variable.name} value={variable.name}>
+                              <SelectItem key={`primary-${variable.name}`} value={variable.name}>
                                 {variable.name} ({variable.type})
                               </SelectItem>
                             ))}
@@ -766,13 +780,20 @@ const Visualization = () => {
                           <Label htmlFor="secondary-variable">
                             {explorationMode === 'relationship' ? 'Second variable:' : 'Measure to compare:'}
                           </Label>
-                          <Select value={secondaryVariable} onValueChange={setSecondaryVariable} key={`secondary-${variables.length}-${datasetState?.hasBeenPrepared}`}>
+                          <Select 
+                            value={secondaryVariable} 
+                            onValueChange={(value) => {
+                              console.log('Secondary variable changed to:', value);
+                              setSecondaryVariable(value);
+                            }}
+                            key={`secondary-${variables.length}-${JSON.stringify(variables.map(v => v.name))}`}
+                          >
                             <SelectTrigger id="secondary-variable">
                               <SelectValue placeholder="Select variable" />
                             </SelectTrigger>
                             <SelectContent>
                               {variables.map(variable => (
-                                <SelectItem key={variable.name} value={variable.name}>
+                                <SelectItem key={`secondary-${variable.name}`} value={variable.name}>
                                   {variable.name} ({variable.type})
                                 </SelectItem>
                               ))}
