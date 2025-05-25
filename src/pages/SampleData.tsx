@@ -1,13 +1,11 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { BarChart2, FileText, Users, Activity, ChevronRight, Download } from 'lucide-react';
-import { createProject } from '@/utils/dataUtils';
 
 type SampleDataset = {
   id: string;
@@ -21,8 +19,6 @@ type SampleDataset = {
 
 const SampleData = () => {
   const navigate = useNavigate();
-  const [selectedDataset, setSelectedDataset] = useState<SampleDataset | null>(null);
-  const [showProjectDialog, setShowProjectDialog] = useState(false);
 
   const sampleDatasets: SampleDataset[] = [
     {
@@ -55,37 +51,31 @@ const SampleData = () => {
   ];
 
   const handleSelectDataset = (dataset: SampleDataset) => {
-    setSelectedDataset(dataset);
-    setShowProjectDialog(true);
-  };
-
-  const handleProjectCreate = (projectName: string) => {
-    if (!selectedDataset) return;
-    
-    // Create a mock file info object similar to what would be generated from a real upload
+    // Create a mock file info object for the sample data
     const fileInfo = {
-      name: `${selectedDataset.name}.csv`,
-      size: Math.floor(selectedDataset.rows * selectedDataset.columns * 20), // Approximate size
+      name: `${dataset.name}.csv`,
+      size: Math.floor(dataset.rows * dataset.columns * 20), // Approximate size
       type: 'text/csv',
       dateUploaded: new Date().toISOString(),
-      rows: selectedDataset.rows,
-      columns: selectedDataset.columns,
-      id: selectedDataset.id
+      rows: dataset.rows,
+      columns: dataset.columns,
+      id: dataset.id
     };
     
-    // Store the selected dataset info in localStorage
+    // Store the selected dataset info in localStorage for temporary use
     localStorage.setItem('currentFile', JSON.stringify(fileInfo));
     localStorage.setItem('isSampleData', 'true');
+    localStorage.setItem('isDemoMode', 'true'); // Flag for demo mode
     
-    // Create and save the project
-    createProject(projectName, fileInfo);
+    // Clear any existing project data since this is demo mode
+    localStorage.removeItem('currentProject');
+    localStorage.removeItem('processedData');
     
     toast.success('Sample dataset loaded successfully', {
-      description: `"${projectName}" is ready for analysis`
+      description: `Exploring "${dataset.name}" in demo mode`
     });
     
-    setShowProjectDialog(false);
-    // Navigate to the data overview page
+    // Navigate directly to the data overview page
     navigate('/data-overview');
   };
   
@@ -97,8 +87,22 @@ const SampleData = () => {
             <h1 className="text-3xl font-bold text-research-900 mb-2">Sample Datasets</h1>
             <p className="text-gray-600">
               Explore Research Studio features with these pre-loaded datasets. 
-              Select any dataset to begin your analysis journey.
+              Your work here won't be saved - this is for testing and exploration only.
             </p>
+          </div>
+
+          {/* Demo Mode Notice */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <FileText className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-1">Demo Mode</h3>
+                <p className="text-blue-700 text-sm">
+                  You're exploring sample data in demo mode. Your work here won't be saved. 
+                  To create permanent projects, use the "Start New Project" option from the dashboard.
+                </p>
+              </div>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 gap-6">
@@ -158,7 +162,7 @@ const SampleData = () => {
                       onClick={() => handleSelectDataset(dataset)}
                       className="bg-research-700 hover:bg-research-800"
                     >
-                      Load Dataset <ChevronRight className="h-4 w-4 ml-1" />
+                      Explore Dataset <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
                   </div>
                 </CardContent>
@@ -177,19 +181,13 @@ const SampleData = () => {
                 </p>
                 <p className="text-gray-600">
                   After selecting a dataset, you'll be guided through the same analysis workflow as if you had uploaded your own data.
+                  Remember: this is demo mode, so your work won't be saved.
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <ProjectNameDialog
-        open={showProjectDialog}
-        onConfirm={handleProjectCreate}
-        title="Name Your Project"
-        description="Give your research project a descriptive name to help you identify it later."
-      />
     </DashboardLayout>
   );
 };

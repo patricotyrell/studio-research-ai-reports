@@ -1,5 +1,9 @@
-
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
+
+// Helper function to check if in demo mode
+export const isDemoMode = () => {
+  return localStorage.getItem('isDemoMode') === 'true';
+};
 
 // Helper function to check if current file is sample data
 export const isSampleData = () => {
@@ -14,21 +18,27 @@ export const getCurrentFile = () => {
   return JSON.parse(fileData);
 };
 
-// Get current project information
+// Get current project information (returns null in demo mode)
 export const getCurrentProject = () => {
+  if (isDemoMode()) return null;
+  
   const projectData = localStorage.getItem('currentProject');
   if (!projectData) return null;
   
   return JSON.parse(projectData);
 };
 
-// Save project information
+// Save project information (disabled in demo mode)
 export const saveProject = (projectInfo: any) => {
+  if (isDemoMode()) return;
+  
   localStorage.setItem('currentProject', JSON.stringify(projectInfo));
 };
 
-// Save project to past projects list
+// Save project to past projects list (disabled in demo mode)
 export const saveProjectToPastProjects = (project: any) => {
+  if (isDemoMode()) return;
+  
   const pastProjects = getPastProjects();
   
   // Check if project already exists (by id)
@@ -45,14 +55,18 @@ export const saveProjectToPastProjects = (project: any) => {
   localStorage.setItem('pastProjects', JSON.stringify(pastProjects));
 };
 
-// Get past projects
+// Get past projects (returns empty array in demo mode)
 export const getPastProjects = () => {
+  if (isDemoMode()) return [];
+  
   const savedProjects = localStorage.getItem('pastProjects');
   return savedProjects ? JSON.parse(savedProjects) : [];
 };
 
-// Create a new project with file data
+// Create a new project with file data (disabled in demo mode)
 export const createProject = (projectName: string, fileData: any, processedData?: any) => {
+  if (isDemoMode()) return null;
+  
   const project = {
     id: Date.now().toString(),
     name: projectName,
@@ -70,8 +84,10 @@ export const createProject = (projectName: string, fileData: any, processedData?
   return project;
 };
 
-// Update project name
+// Update project name (disabled in demo mode)
 export const updateProjectName = (newName: string) => {
+  if (isDemoMode()) return;
+  
   const project = getCurrentProject();
   if (project) {
     project.name = newName;
@@ -82,8 +98,10 @@ export const updateProjectName = (newName: string) => {
   }
 };
 
-// Update project with new data
+// Update project with new data (disabled in demo mode)
 export const updateProject = (updates: any) => {
+  if (isDemoMode()) return null;
+  
   const project = getCurrentProject();
   if (project) {
     const updatedProject = { ...project, ...updates };
@@ -92,6 +110,16 @@ export const updateProject = (updates: any) => {
     return updatedProject;
   }
   return null;
+};
+
+// Clear demo mode data
+export const clearDemoMode = () => {
+  localStorage.removeItem('isDemoMode');
+  localStorage.removeItem('isSampleData');
+  localStorage.removeItem('currentFile');
+  localStorage.removeItem('processedData');
+  localStorage.removeItem('completedPrepSteps');
+  localStorage.removeItem('preparedVariables');
 };
 
 // Save preparation step completion status
