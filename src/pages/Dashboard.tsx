@@ -1,11 +1,11 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
-import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen } from 'lucide-react';
+import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
 import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects } from '@/utils/dataUtils';
 
 const Dashboard = () => {
@@ -13,6 +13,7 @@ const Dashboard = () => {
   const [currentProject, setCurrentProject] = useState<any>(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [pastProjects, setPastProjects] = useState<any[]>([]);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   
   // Check if user is logged in
   useEffect(() => {
@@ -173,51 +174,64 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Projects Section */}
+        {/* Collapsible Projects Section */}
         {pastProjects.length > 0 && (
           <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FolderOpen className="h-6 w-6 mr-2 text-research-700" />
-                Projects
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {pastProjects.map((project) => (
-                  <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-research-900">{project.name}</h3>
-                      <div className="flex items-center text-sm text-gray-500 mt-1">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {new Date(project.createdAt).toLocaleDateString()}
-                        {project.fileData && (
-                          <span className="ml-4">
-                            {project.fileData.rows} rows, {project.fileData.columns} columns
-                          </span>
-                        )}
-                      </div>
+            <CardContent className="p-0">
+              <Collapsible open={isProjectsOpen} onOpenChange={setIsProjectsOpen}>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between p-6 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <div className="flex items-center">
+                      <FolderOpen className="h-5 w-5 mr-3 text-research-700" />
+                      <span className="text-lg font-semibold text-research-900">
+                        📁 Projects ({pastProjects.length} total)
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleLoadProject(project)}
-                      >
-                        Open
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteProject(project.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {isProjectsOpen ? (
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-gray-500" />
+                    )}
                   </div>
-                ))}
-              </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-6 pb-6 space-y-4 border-t border-gray-100">
+                    {pastProjects.map((project) => (
+                      <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-research-900">{project.name}</h3>
+                          <div className="flex items-center text-sm text-gray-500 mt-1">
+                            <Calendar className="h-4 w-4 mr-1" />
+                            {new Date(project.createdAt).toLocaleDateString()}
+                            {project.fileData && (
+                              <span className="ml-4">
+                                {project.fileData.rows} rows, {project.fileData.columns} columns
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleLoadProject(project)}
+                          >
+                            Open
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteProject(project.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </CardContent>
           </Card>
         )}
