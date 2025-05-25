@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -276,8 +277,8 @@ const Analysis = () => {
     <DashboardLayout>
       <div className="p-6">
         <StepIndicator 
-          currentStep={4} 
-          steps={['Upload', 'Overview', 'Preparation', 'Analysis', 'Visualization', 'Report']} 
+          currentStep={5} 
+          steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
         />
         
         <div className="max-w-4xl mx-auto mt-6">
