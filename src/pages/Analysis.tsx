@@ -262,7 +262,7 @@ const Analysis = () => {
   };
 
   const handleContinue = () => {
-    navigate('/visualization');
+    navigate('/report');
   };
 
   const canRunAnalysis = () => {
@@ -373,7 +373,7 @@ const Analysis = () => {
                   onClick={handleContinue} 
                   className="bg-research-700 hover:bg-research-800"
                 >
-                  Continue to Visualization
+                  Continue to Report
                 </Button>
               </div>
             </div>
