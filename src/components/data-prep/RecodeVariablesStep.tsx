@@ -369,25 +369,6 @@ const RecodeVariablesStep: React.FC<RecodeVariablesStepProps> = ({
             </div>
           ))}
         </div>
-        
-        <div className="flex justify-between mt-6">
-          <Button 
-            variant="outline" 
-            onClick={onBack}
-            className="flex items-center gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          
-          <Button 
-            className="bg-research-700 hover:bg-research-800 flex items-center gap-1"
-            onClick={handleComplete}
-          >
-            Continue
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
       </StepFlow>
     );
   }
