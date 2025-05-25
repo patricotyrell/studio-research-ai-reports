@@ -27,13 +27,71 @@ export const saveProject = (projectInfo: any) => {
   localStorage.setItem('currentProject', JSON.stringify(projectInfo));
 };
 
+// Save project to past projects list
+export const saveProjectToPastProjects = (project: any) => {
+  const pastProjects = getPastProjects();
+  
+  // Check if project already exists (by id)
+  const existingIndex = pastProjects.findIndex(p => p.id === project.id);
+  
+  if (existingIndex >= 0) {
+    // Update existing project
+    pastProjects[existingIndex] = project;
+  } else {
+    // Add new project
+    pastProjects.push(project);
+  }
+  
+  localStorage.setItem('pastProjects', JSON.stringify(pastProjects));
+};
+
+// Get past projects
+export const getPastProjects = () => {
+  const savedProjects = localStorage.getItem('pastProjects');
+  return savedProjects ? JSON.parse(savedProjects) : [];
+};
+
+// Create a new project with file data
+export const createProject = (projectName: string, fileData: any, processedData?: any) => {
+  const project = {
+    id: Date.now().toString(),
+    name: projectName,
+    createdAt: new Date().toISOString(),
+    fileData,
+    processedData
+  };
+  
+  // Save as current project
+  saveProject(project);
+  
+  // Save to past projects list
+  saveProjectToPastProjects(project);
+  
+  return project;
+};
+
 // Update project name
 export const updateProjectName = (newName: string) => {
   const project = getCurrentProject();
   if (project) {
     project.name = newName;
     saveProject(project);
+    
+    // Also update in past projects
+    saveProjectToPastProjects(project);
   }
+};
+
+// Update project with new data
+export const updateProject = (updates: any) => {
+  const project = getCurrentProject();
+  if (project) {
+    const updatedProject = { ...project, ...updates };
+    saveProject(updatedProject);
+    saveProjectToPastProjects(updatedProject);
+    return updatedProject;
+  }
+  return null;
 };
 
 // Save preparation step completion status

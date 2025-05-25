@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen } from 'lucide-react';
-import { getCurrentProject, updateProjectName, getCurrentFile } from '@/utils/dataUtils';
+import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects, saveProjectToPastProjects } from '@/utils/dataUtils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -25,11 +25,9 @@ const Dashboard = () => {
     const project = getCurrentProject();
     setCurrentProject(project);
     
-    // Load past projects from localStorage
-    const savedProjects = localStorage.getItem('pastProjects');
-    if (savedProjects) {
-      setPastProjects(JSON.parse(savedProjects));
-    }
+    // Load past projects
+    const projects = getPastProjects();
+    setPastProjects(projects);
   }, [navigate]);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -41,6 +39,10 @@ const Dashboard = () => {
     const updatedProject = getCurrentProject();
     setCurrentProject(updatedProject);
     setShowRenameDialog(false);
+    
+    // Refresh past projects list
+    const projects = getPastProjects();
+    setPastProjects(projects);
   };
   
   const handleContinueProject = () => {
@@ -168,7 +170,7 @@ const Dashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <FolderOpen className="h-6 w-6 mr-2 text-research-700" />
-                Past Projects
+                Projects
               </CardTitle>
             </CardHeader>
             <CardContent>
