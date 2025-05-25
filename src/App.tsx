@@ -14,6 +14,9 @@ import DataPreparation from "./pages/DataPreparation";
 import Visualization from "./pages/Visualization";
 import Analysis from "./pages/Analysis";
 import Report from "./pages/Report";
+import Settings from "./pages/Settings";
+import Subscription from "./pages/Subscription";
+import Support from "./pages/Support";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +38,9 @@ const App = () => (
           <Route path="/visualization" element={<Visualization />} />
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/report" element={<Report />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/subscription" element={<Subscription />} />
+          <Route path="/support" element={<Support />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

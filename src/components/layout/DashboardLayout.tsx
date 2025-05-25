@@ -4,9 +4,18 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
   Upload, Database, FileText, BarChart2, 
   FileUp, LayoutDashboard, Settings, LogOut,
-  Menu, X, ChartBar, FileBarChart
+  Menu, X, ChartBar, FileBarChart, User, 
+  CreditCard, HelpCircle, ChevronDown
 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,6 +41,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const isActive = (path: string) => {
     return location.pathname === path;
   };
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -74,15 +85,39 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           </div>
           
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-gray-500"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 text-gray-700 hover:text-research-700"
+                >
+                  <User className="h-4 w-4" />
+                  <span className="hidden md:inline">{user.email || 'Account'}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-white">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Account Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/subscription')}>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Subscription & Plan
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/support')}>
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  Support
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
