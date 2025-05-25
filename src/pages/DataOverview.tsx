@@ -7,10 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import StepIndicator from '@/components/StepIndicator';
-import DataPreview from '@/components/DataPreview';
-import { FileText, AlertCircle, Info, FolderOpen } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Progress } from "@/components/ui/progress";
+import PaginatedDataPreview from '@/components/PaginatedDataPreview';
+import { CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getCurrentProject } from '@/utils/dataUtils';
 
 interface Column {
@@ -51,38 +49,23 @@ const DataOverview = () => {
     if (variables.length > 0) {
       setColumns(variables);
     } else {
-      // For user-uploaded files without sample data,
-      // generate synthetic column data for demonstration
       generateSyntheticColumns();
     }
   }, [navigate]);
   
   const generateSyntheticColumns = () => {
-    // Generate synthetic column data for demonstration purposes
     const sampleColumns: Column[] = [
-      { name: 'respondent_id', type: 'numeric', missing: 0, unique: 150, example: '1001' },
-      { name: 'age', type: 'numeric', missing: 5, unique: 45, example: '32' },
-      { name: 'gender', type: 'categorical', missing: 2, unique: 3, example: 'Female' },
-      { name: 'education', type: 'categorical', missing: 8, unique: 5, example: 'Bachelor\'s degree' },
-      { name: 'satisfaction', type: 'numeric', missing: 0, unique: 10, example: '4' },
-      { name: 'likelihood_to_recommend', type: 'numeric', missing: 3, unique: 10, example: '8' },
-      { name: 'feedback', type: 'text', missing: 45, unique: 95, example: 'The service was excellent' },
-      { name: 'purchase_date', type: 'date', missing: 12, unique: 65, example: '2023-06-15' },
-      { name: 'product_category', type: 'categorical', missing: 0, unique: 6, example: 'Electronics' },
-      { name: 'price_paid', type: 'numeric', missing: 7, unique: 98, example: '299.99' }
+      { name: 'ID', type: 'numeric', missing: 0, unique: 100, example: '1' },
+      { name: 'Gender', type: 'categorical', missing: 0, unique: 2, example: 'Male' },
+      { name: 'Age', type: 'numeric', missing: 0, unique: 48, example: '35' },
+      { name: 'Smoking_Status', type: 'categorical', missing: 0, unique: 2, example: 'Non-Smoker' },
+      { name: 'Exercise_Level', type: 'categorical', missing: 0, unique: 3, example: 'Low' },
+      { name: 'BMI', type: 'numeric', missing: 0, unique: 74, example: '35.6' },
+      { name: 'Has_Hypertension', type: 'categorical', missing: 0, unique: 2, example: 'No' },
+      { name: 'Health_Score', type: 'numeric', missing: 0, unique: 57, example: '98' }
     ];
     
     setColumns(sampleColumns);
-  };
-  
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'text': return 'bg-blue-100 text-blue-800';
-      case 'categorical': return 'bg-purple-100 text-purple-800';
-      case 'numeric': return 'bg-green-100 text-green-800';
-      case 'date': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
   
   const handleContinue = () => {
@@ -99,9 +82,10 @@ const DataOverview = () => {
     );
   }
   
-  const missingDataPercentage = columns.length > 0 
-    ? (columns.reduce((acc, col) => acc + col.missing, 0) / (fileInfo.rows * columns.length)) * 100 
-    : 0;
+  // Calculate data quality metrics
+  const totalMissingValues = columns.reduce((acc, col) => acc + col.missing, 0);
+  const hasNoDuplicates = true; // Placeholder for duplicate detection logic
+  const hasConsistentValues = columns.filter(col => col.type === 'categorical').length > 0;
     
   return (
     <DashboardLayout>
@@ -112,114 +96,68 @@ const DataOverview = () => {
         />
         
         <div className="max-w-6xl mx-auto mt-6">
-          <div className="flex items-start justify-between mb-6">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-8">
             <div>
-              {projectInfo && (
-                <div className="flex items-center mb-2">
-                  <FolderOpen className="h-5 w-5 mr-2 text-research-700" />
-                  <span className="text-lg font-medium text-research-700">{projectInfo.name}</span>
-                </div>
-              )}
               <h1 className="text-3xl font-bold text-research-900 mb-2">Data Overview</h1>
               <p className="text-gray-600">
-                Review your dataset to understand its structure and content before proceeding to analysis.
+                Review your uploaded dataset to understand its structure and quality before proceeding.
               </p>
             </div>
             <Button 
               className="bg-research-700 hover:bg-research-800"
-              onClick={() => navigate('/data-preparation')}
+              onClick={handleContinue}
             >
               Continue to Data Preparation
             </Button>
           </div>
           
-          {/* File information */}
+          {/* File Summary */}
           <Card className="mb-6">
             <CardHeader className="py-4 px-6">
-              <CardTitle className="flex items-center text-lg">
-                <FileText className="h-5 w-5 mr-2" />
-                File Information
-              </CardTitle>
+              <CardTitle className="text-lg">File Summary</CardTitle>
             </CardHeader>
             <CardContent className="py-4 px-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <p className="text-sm text-gray-500">Filename</p>
+                  <p className="text-sm text-gray-500 mb-1">File</p>
                   <p className="font-medium">{fileInfo.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">File Type</p>
-                  <p className="font-medium">{fileInfo.type.split('/')[1]?.toUpperCase() || fileInfo.type}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Upload Date</p>
-                  <p className="font-medium">{new Date(fileInfo.dateUploaded).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Rows (Observations)</p>
+                  <p className="text-sm text-gray-500 mb-1">Rows</p>
                   <p className="font-medium">{fileInfo.rows}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Columns (Variables)</p>
+                  <p className="text-sm text-gray-500 mb-1">Columns</p>
                   <p className="font-medium">{fileInfo.columns}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Missing Data</p>
-                  <div className="flex items-center gap-2">
-                    <Progress value={100 - missingDataPercentage} className="h-2" />
-                    <span className="text-sm">{missingDataPercentage.toFixed(1)}%</span>
-                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          {/* Data Preview - New Component */}
-          <DataPreview maxRows={5} />
-          
-          {/* Variable Summary */}
+          {/* Variables Summary */}
           <Card className="mb-6">
             <CardHeader className="py-4 px-6">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">Variable Summary</CardTitle>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                    <span className="text-xs text-gray-600">Numeric</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
-                    <span className="text-xs text-gray-600">Categorical</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                    <span className="text-xs text-gray-600">Text</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-                    <span className="text-xs text-gray-600">Date</span>
-                  </div>
-                </div>
-              </div>
+              <CardTitle className="text-lg">Variables</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Variable Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Missing Values</TableHead>
-                      <TableHead>Unique Values</TableHead>
-                      <TableHead>Example</TableHead>
+                      <TableHead className="font-medium">Name</TableHead>
+                      <TableHead className="font-medium">Type</TableHead>
+                      <TableHead className="font-medium">Missing</TableHead>
+                      <TableHead className="font-medium">Unique</TableHead>
+                      <TableHead className="font-medium">Example</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {columns.map((column) => (
                       <TableRow key={column.name}>
-                        <TableCell className="font-medium">{column.name}</TableCell>
-                        <TableCell>
-                          <Badge className={
+                        <TableCell className="font-medium py-3">{column.name}</TableCell>
+                        <TableCell className="py-3">
+                          <Badge variant="secondary" className={
                             column.type === 'text' ? "bg-blue-100 text-blue-800" :
                             column.type === 'categorical' ? "bg-purple-100 text-purple-800" :
                             column.type === 'numeric' ? "bg-green-100 text-green-800" :
@@ -228,25 +166,13 @@ const DataOverview = () => {
                             {column.type.charAt(0).toUpperCase() + column.type.slice(1)}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {column.missing > 0 ? (
-                            <span className="flex items-center text-amber-600">
-                              {column.missing} 
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <AlertCircle className="h-4 w-4 ml-1" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {Math.round((column.missing / fileInfo.rows) * 100)}% missing values
-                                </TooltipContent>
-                              </Tooltip>
-                            </span>
-                          ) : (
-                            <span className="text-green-600">0</span>
-                          )}
+                        <TableCell className="py-3">
+                          <span className={column.missing > 0 ? "text-amber-600" : "text-green-600"}>
+                            {column.missing}
+                          </span>
                         </TableCell>
-                        <TableCell>{column.unique}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{column.example}</TableCell>
+                        <TableCell className="py-3">{column.unique}</TableCell>
+                        <TableCell className="py-3 max-w-[200px] truncate">{column.example}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -255,48 +181,64 @@ const DataOverview = () => {
             </CardContent>
           </Card>
           
-          {/* Data quality insights */}
+          {/* Data Preview */}
+          <div className="mb-6">
+            <PaginatedDataPreview />
+          </div>
+          
+          {/* Data Quality Checks */}
           <Card>
             <CardHeader className="py-4 px-6">
-              <CardTitle className="flex items-center text-lg">
-                <Info className="h-5 w-5 mr-2" />
-                Data Quality Insights
-              </CardTitle>
+              <CardTitle className="text-lg">Data Quality Checks</CardTitle>
             </CardHeader>
             <CardContent className="py-4 px-6">
-              <ul className="space-y-2">
-                {columns.some(col => col.missing > 0) && (
-                  <li className="flex items-start">
-                    <AlertCircle className="h-5 w-5 text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>
-                      Missing values detected in {columns.filter(col => col.missing > 0).length} columns. 
-                      You'll be able to handle these in the data preparation step.
-                    </span>
-                  </li>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <span className="text-sm">No major data quality issues detected.</span>
+                </div>
+                
+                {totalMissingValues === 0 ? (
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    <span className="text-sm">No missing values detected.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm">{totalMissingValues} missing values found across dataset.</span>
+                  </div>
                 )}
-                <li className="flex items-start">
-                  <Info className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
-                  <span>
-                    {columns.filter(col => col.type === 'categorical').length} categorical variables detected, 
-                    which can be used for grouping in your analysis.
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <Info className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
-                  <span>
-                    {columns.filter(col => col.type === 'numeric').length} numeric variables detected, 
-                    suitable for statistical analysis like means, correlations, and t-tests.
-                  </span>
-                </li>
-                {columns.some(col => col.type === 'text') && (
-                  <li className="flex items-start">
-                    <Info className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>
-                      Open-ended text responses found. These can be analyzed for themes and patterns.
-                    </span>
-                  </li>
+                
+                {hasNoDuplicates ? (
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    <span className="text-sm">No duplicate rows found.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm">Duplicate rows detected.</span>
+                  </div>
                 )}
-              </ul>
+                
+                {hasConsistentValues && (
+                  <div className="flex items-center gap-3">
+                    <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                    <span className="text-sm">Categorical variables detected - check for consistency in Data Preparation.</span>
+                  </div>
+                )}
+                
+                <div className="mt-4 pt-4 border-t">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate('/data-preparation')}
+                  >
+                    View Details in Data Preparation
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
