@@ -4,18 +4,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { getDatasetPreviewRows } from '@/utils/dataUtils';
+import { getDatasetVariables, getCurrentFile, getFullDatasetRows } from '@/utils/dataUtils';
 
 const PaginatedDataPreview: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const rowsPerPage = 10;
   
-  const allRows = getDatasetPreviewRows();
+  const variables = getDatasetVariables();
+  const fileInfo = getCurrentFile();
   
+  // Get all available rows for pagination
+  const allRows = getFullDatasetRows();
+  
+  console.log('PaginatedDataPreview - variables:', variables?.length);
   console.log('PaginatedDataPreview - allRows:', allRows);
   console.log('PaginatedDataPreview - allRows.length:', allRows?.length);
+  console.log('PaginatedDataPreview - fileInfo:', fileInfo);
   
-  if (!allRows || allRows.length === 0) {
+  if (!allRows || allRows.length === 0 || !variables || variables.length === 0) {
     return (
       <Card>
         <CardHeader className="py-4 px-6">
@@ -28,7 +34,7 @@ const PaginatedDataPreview: React.FC = () => {
     );
   }
   
-  const columnNames = Object.keys(allRows[0]);
+  const columnNames = variables.map(v => v.name);
   const totalPages = Math.ceil(allRows.length / rowsPerPage);
   const startIndex = currentPage * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
@@ -37,6 +43,7 @@ const PaginatedDataPreview: React.FC = () => {
   console.log('PaginatedDataPreview - totalPages:', totalPages);
   console.log('PaginatedDataPreview - currentPage:', currentPage);
   console.log('PaginatedDataPreview - currentRows.length:', currentRows.length);
+  console.log('PaginatedDataPreview - startIndex:', startIndex, 'endIndex:', endIndex);
   
   const handlePrevious = () => {
     console.log('Previous button clicked, current page:', currentPage);
