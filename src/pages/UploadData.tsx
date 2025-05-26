@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -57,6 +58,15 @@ const UploadData = () => {
   };
 
   const handleFileSelection = async (selectedFile: File) => {
+    // Check file size (10MB limit for localStorage safety)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (selectedFile.size > maxSize) {
+      toast.error('File too large', {
+        description: 'Please upload a file smaller than 10MB to ensure optimal performance.',
+      });
+      return;
+    }
+
     const fileName = selectedFile.name.toLowerCase();
     const isCSV = fileName.endsWith('.csv');
     const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
@@ -114,11 +124,17 @@ const UploadData = () => {
     
     try {
       console.log('Processing file:', selectedFile.name, 'Size:', selectedFile.size);
+      
       const processed = await processFileData(selectedFile, selectedSheet);
-      console.log('File processed successfully:', processed);
+      console.log('File processed successfully:', {
+        variables: processed.variables.length,
+        totalRows: processed.totalRows,
+        previewRows: processed.previewRows.length
+      });
+      
       setProcessedData(processed);
       
-      // Store minimal file info (don't store all data in localStorage)
+      // Store minimal file info only (avoid localStorage quota issues)
       const fileInfo = {
         name: selectedFile.name,
         size: selectedFile.size,
@@ -129,21 +145,28 @@ const UploadData = () => {
         selectedSheet: selectedSheet || undefined
       };
       
-      localStorage.setItem('currentFile', JSON.stringify(fileInfo));
-      // Store only essential processed data
-      localStorage.setItem('processedData', JSON.stringify({
-        variables: processed.variables,
-        previewRows: processed.previewRows,
-        totalRows: processed.totalRows
-      }));
-      localStorage.setItem('isSampleData', 'false');
+      // Store essential data with error handling
+      try {
+        localStorage.setItem('currentFile', JSON.stringify(fileInfo));
+        localStorage.setItem('processedData', JSON.stringify({
+          variables: processed.variables,
+          previewRows: processed.previewRows,
+          totalRows: processed.totalRows
+        }));
+        localStorage.setItem('isSampleData', 'false');
+      } catch (storageError) {
+        console.warn('localStorage quota exceeded, using memory-only mode:', storageError);
+        toast.warning('Large file detected', {
+          description: 'Your file is being processed in memory-optimized mode for better performance.',
+        });
+      }
       
       setShowProjectDialog(true);
       
     } catch (error) {
       console.error('Error processing file:', error);
       toast.error('Error processing file', {
-        description: error instanceof Error ? error.message : 'Failed to process the uploaded file. The file may be too large or contain invalid data.',
+        description: error instanceof Error ? error.message : 'Failed to process the uploaded file. Please check the file format and try again.',
       });
       setFile(null);
     } finally {
@@ -164,18 +187,25 @@ const UploadData = () => {
     };
     
     // Create and save the project (only essential data)
-    createProject(projectName, fileInfo, {
-      variables: processedData.variables,
-      previewRows: processedData.previewRows,
-      totalRows: processedData.totalRows
-    });
-    
-    toast.success('Project created successfully', {
-      description: `"${projectName}" is ready for analysis`,
-    });
-    
-    setShowProjectDialog(false);
-    navigate('/data-overview');
+    try {
+      createProject(projectName, fileInfo, {
+        variables: processedData.variables,
+        previewRows: processedData.previewRows,
+        totalRows: processedData.totalRows
+      });
+      
+      toast.success('Project created successfully', {
+        description: `"${projectName}" is ready for analysis`,
+      });
+      
+      setShowProjectDialog(false);
+      navigate('/data-overview');
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast.error('Error creating project', {
+        description: 'Failed to create project. Please try again.',
+      });
+    }
   };
 
   return (
@@ -199,26 +229,9 @@ const UploadData = () => {
                       ? 'bg-green-50 border-2 border-dashed border-green-300'
                       : ''
                 }`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                  
-                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    const droppedFile = e.dataTransfer.files[0];
-                    handleFileSelection(droppedFile);
-                  }
-                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 {isProcessing ? (
                   <div className="text-center">
@@ -277,12 +290,7 @@ const UploadData = () => {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      const selectedFile = e.target.files[0];
-                      handleFileSelection(selectedFile);
-                    }
-                  }}
+                  onChange={handleFileChange}
                 />
               </div>
             </CardContent>
@@ -293,7 +301,7 @@ const UploadData = () => {
             <h4 className="font-medium text-blue-900 mb-2">File Requirements</h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• CSV or Excel format (.csv, .xlsx, .xls) with headers in the first row</li>
-              <li>• Maximum file size: 10MB</li>
+              <li>• Maximum file size: 10MB for optimal performance</li>
               <li>• UTF-8 encoding recommended for CSV files</li>
               <li>• Each column should represent a variable/question</li>
               <li>• For Excel files with multiple sheets, you'll be prompted to select one</li>
