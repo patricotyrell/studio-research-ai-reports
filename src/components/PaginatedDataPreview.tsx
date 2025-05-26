@@ -39,12 +39,23 @@ const PaginatedDataPreview: React.FC = () => {
   console.log('PaginatedDataPreview - currentRows.length:', currentRows.length);
   
   const handlePrevious = () => {
-    setCurrentPage(prev => Math.max(0, prev - 1));
+    console.log('Previous button clicked, current page:', currentPage);
+    if (currentPage > 0) {
+      setCurrentPage(prev => prev - 1);
+    }
   };
   
   const handleNext = () => {
-    setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
+    console.log('Next button clicked, current page:', currentPage, 'total pages:', totalPages);
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(prev => prev + 1);
+    }
   };
+  
+  const isPreviousDisabled = currentPage === 0;
+  const isNextDisabled = currentPage >= totalPages - 1;
+  
+  console.log('Navigation state - isPreviousDisabled:', isPreviousDisabled, 'isNextDisabled:', isNextDisabled);
   
   return (
     <Card>
@@ -88,8 +99,9 @@ const PaginatedDataPreview: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={handlePrevious}
-              disabled={currentPage === 0}
+              disabled={isPreviousDisabled}
               className="flex items-center gap-1"
+              type="button"
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
@@ -101,8 +113,9 @@ const PaginatedDataPreview: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={handleNext}
-              disabled={currentPage === totalPages - 1}
+              disabled={isNextDisabled}
               className="flex items-center gap-1"
+              type="button"
             >
               Next
               <ChevronRight className="h-4 w-4" />
