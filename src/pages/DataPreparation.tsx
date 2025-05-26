@@ -14,7 +14,7 @@ import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
 import RemoveColumnsStep from '@/components/data-prep/RemoveColumnsStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
 import { saveStepCompletion, getCompletedSteps, getCurrentDatasetState } from '@/utils/dataUtils';
-import { getDatasetInfo } from '@/utils/datasetCache';
+import { getDatasetInfo, logDatasetState } from '@/utils/datasetCache';
 
 const TOTAL_STEPS = 6;
 
@@ -39,41 +39,55 @@ const DataPreparation = () => {
       return;
     }
     
-    // Debug: Check current dataset state
+    // CRITICAL: Log dataset state on component mount
+    console.log('🎯 DATA PREPARATION - Component mounted');
     const datasetInfo = getDatasetInfo();
-    console.log('Data Preparation - Current dataset info:', datasetInfo);
+    console.log('📊 Data Preparation - Current dataset info:', datasetInfo);
     
     // Load current dataset state to restore any existing changes
     const currentState = getCurrentDatasetState();
     if (currentState.prepChanges) {
       setStepChanges(currentState.prepChanges);
+      console.log('🔄 Restored existing prep changes:', currentState.prepChanges);
     }
   }, [navigate]);
 
   // FIXED: Only apply changes when step is explicitly completed with real changes
   const handleStepComplete = (step: string, autoApplied: boolean, changes?: any) => {
-    console.log(`Step ${step} completed with changes:`, changes);
+    console.log(`✅ Step ${step} completed:`, { autoApplied, changes, hasChanges: changes && Object.keys(changes).length > 0 });
     
     // CRITICAL: Only proceed if there are actual changes to apply
     if (!changes || Object.keys(changes).length === 0) {
-      console.log('No changes to apply, marking step as completed but not modifying data');
+      console.log(`⏭️ Step ${step} completed but no changes to apply - preserving dataset`);
       // Mark step as completed but don't modify data
       const newCompletedSteps = { ...completedSteps };
       newCompletedSteps[step as keyof typeof completedSteps] = true;
       setCompletedSteps(newCompletedSteps);
       saveStepCompletion(step, true);
+      
+      // Log the skipped step
+      const datasetInfo = getDatasetInfo();
+      console.log(`📋 Step ${step} skipped – no transformation applied. Dataset row count preserved: ${datasetInfo.totalRows}`);
       return;
     }
+    
+    console.log(`🔄 APPLYING CHANGES for step: ${step}`);
     
     // Store the changes for this step
     const newStepChanges = { ...stepChanges, [step]: changes };
     setStepChanges(newStepChanges);
     
     // CRITICAL: Only apply changes to dataset when step is actually completed WITH changes
-    // Import applyDataPrepChanges only when needed to avoid circular dependencies
     import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
-      console.log('APPLYING CHANGES to dataset for step:', step);
+      console.log('🚀 APPLYING CHANGES to dataset for step:', step);
+      const beforeInfo = getDatasetInfo();
+      console.log('📊 Dataset before applying changes:', beforeInfo);
+      
       applyDataPrepChanges(step, changes);
+      
+      const afterInfo = getDatasetInfo();
+      console.log('📊 Dataset after applying changes:', afterInfo);
+      console.log(`📈 Row count change: ${beforeInfo.totalRows} → ${afterInfo.totalRows} (${afterInfo.totalRows - beforeInfo.totalRows})`);
       
       // Clear any subsequent step changes since data has changed
       const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
@@ -87,6 +101,7 @@ const DataPreparation = () => {
           newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
           setCompletedSteps(newCompletedSteps);
           saveStepCompletion(laterStep, false);
+          console.log(`🔄 Reset later step: ${laterStep}`);
         });
         setStepChanges(updatedStepChanges);
       }
@@ -103,41 +118,62 @@ const DataPreparation = () => {
   
   // FIXED: Navigation should NEVER trigger data changes - pure navigation only
   const handleNext = () => {
-    console.log('Navigation: Moving to next step (no data changes)');
+    console.log('➡️ NAVIGATION: Moving to next step (NO data changes)');
+    const beforeInfo = getDatasetInfo();
+    
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep(prev => prev + 1);
     } else {
       // Last step, go to summary
       setCurrentStep(7);
     }
+    
+    const afterInfo = getDatasetInfo();
+    console.log(`📊 Dataset preserved during navigation: ${beforeInfo.totalRows} rows maintained`);
+    if (beforeInfo.totalRows !== afterInfo.totalRows) {
+      console.error('🚨 ERROR: Dataset changed during navigation!', { before: beforeInfo.totalRows, after: afterInfo.totalRows });
+    }
   };
   
   const handleBack = () => {
-    console.log('Navigation: Moving to previous step (no data changes)');
+    console.log('⬅️ NAVIGATION: Moving to previous step (NO data changes)');
+    const beforeInfo = getDatasetInfo();
+    
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
     }
+    
+    const afterInfo = getDatasetInfo();
+    console.log(`📊 Dataset preserved during navigation: ${beforeInfo.totalRows} rows maintained`);
   };
 
   const handleSkipToSummary = () => {
-    console.log('Navigation: Skipping to summary (no data changes)');
+    console.log('⏭️ NAVIGATION: Skipping to summary (NO data changes)');
+    const beforeInfo = getDatasetInfo();
     setCurrentStep(7);
+    const afterInfo = getDatasetInfo();
+    console.log(`📊 Dataset preserved during skip: ${beforeInfo.totalRows} rows maintained`);
   };
 
   // FIXED: Step navigation should NEVER modify data - pure navigation only
   const handleNavigateToStep = (step: number) => {
-    console.log(`Navigation: Moving to step ${step} (NO data changes applied)`);
+    console.log(`🎯 NAVIGATION: Moving to step ${step} (NO data changes applied)`);
+    const beforeInfo = getDatasetInfo();
     setCurrentStep(step);
+    const afterInfo = getDatasetInfo();
+    console.log(`📊 Dataset preserved during step navigation: ${beforeInfo.totalRows} rows maintained`);
   };
   
   const handleFinish = () => {
+    console.log('🏁 FINISHING data preparation');
     setLoading(true);
     
-    // Ensure all changes are properly saved before navigating
+    // Log final state before navigating
     const finalState = getCurrentDatasetState();
     const datasetInfo = getDatasetInfo();
-    console.log('Final dataset state before navigation:', finalState);
-    console.log('Final dataset info:', datasetInfo);
+    console.log('📊 Final dataset state before navigation to visualization:', finalState);
+    console.log('📊 Final dataset info:', datasetInfo);
+    console.log(`📈 Carrying ${datasetInfo.totalRows} rows to Visualization module`);
     
     setTimeout(() => {
       setLoading(false);
@@ -236,10 +272,13 @@ const DataPreparation = () => {
             <p className="text-gray-600">
               Prepare your data for analysis by following our AI-guided workflow or making manual adjustments.
             </p>
-            {/* Debug info - can be removed in production */}
-            <div className="text-xs text-gray-400 mt-2">
-              Dataset: {datasetInfo.totalRows} rows, {datasetInfo.totalVariables} variables 
-              {datasetInfo.isRealData ? " (Real Data)" : " (Sample Data)"}
+            {/* Enhanced debug info with session tracking */}
+            <div className="text-xs text-gray-400 mt-2 font-mono">
+              📊 Dataset: {datasetInfo.totalRows} rows, {datasetInfo.totalVariables} variables 
+              {datasetInfo.isRealData ? " (Real Data)" : " (Sample Data)"} 
+              | Session: {datasetInfo.sessionId?.slice(-8) || 'N/A'}
+              | {datasetInfo.locked ? "🔒 Locked" : "🔓 Unlocked"}
+              | File: {datasetInfo.fileName}
             </div>
           </div>
           
