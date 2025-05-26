@@ -57,6 +57,136 @@ export const getDatasetForAnalysis = () => {
   };
 };
 
+// Re-export from datasetCache with proper export
+export { getDatasetVariables } from './datasetCache';
+
+// Get preview rows for data preview components
+export const getDatasetPreviewRows = (limit: number = 100) => {
+  const allRows = getAllDatasetRows();
+  return allRows.slice(0, limit);
+};
+
+// Check if dataset has been modified from original
+export const hasDatasetBeenModified = () => {
+  const prepChanges = getPrepChanges();
+  return Object.keys(prepChanges).length > 0;
+};
+
+// Get current file info
+export const getCurrentFile = () => {
+  try {
+    const fileInfo = localStorage.getItem('currentFile');
+    return fileInfo ? JSON.parse(fileInfo) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Get full dataset rows with pagination
+export const getFullDatasetRows = async (page: number = 0, limit: number = 100) => {
+  const allRows = getAllDatasetRows();
+  const start = page * limit;
+  const end = start + limit;
+  return allRows.slice(start, end);
+};
+
+// Apply data preparation changes
+export const applyDataPrepChanges = (stepName: string, changes: any) => {
+  console.log(`🔄 Applying data prep changes for step: ${stepName}`, changes);
+  // This would integrate with the datasetCache to apply changes
+  // For now, just log the changes
+};
+
+// Get current project info
+export const getCurrentProject = () => {
+  try {
+    const projectInfo = localStorage.getItem('currentProject');
+    return projectInfo ? JSON.parse(projectInfo) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Update project name
+export const updateProjectName = (name: string) => {
+  const project = getCurrentProject();
+  if (project) {
+    project.name = name;
+    localStorage.setItem('currentProject', JSON.stringify(project));
+  }
+};
+
+// Get past projects
+export const getPastProjects = () => {
+  try {
+    const projects = localStorage.getItem('pastProjects');
+    return projects ? JSON.parse(projects) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Check if in demo mode
+export const isDemoMode = () => {
+  return localStorage.getItem('demoMode') === 'true';
+};
+
+// Clear demo mode
+export const clearDemoMode = () => {
+  localStorage.removeItem('demoMode');
+};
+
+// Save step completion status
+export const saveStepCompletion = (stepName: string, completed: boolean) => {
+  try {
+    const completedSteps = getCompletedSteps();
+    completedSteps[stepName] = completed;
+    localStorage.setItem('completedSteps', JSON.stringify(completedSteps));
+  } catch (error) {
+    console.error('Error saving step completion:', error);
+  }
+};
+
+// Get completed steps
+export const getCompletedSteps = () => {
+  try {
+    const steps = localStorage.getItem('completedSteps');
+    return steps ? JSON.parse(steps) : {};
+  } catch {
+    return {};
+  }
+};
+
+// Process file data (simplified version)
+export const processFileData = async (file: File, selectedSheet?: string) => {
+  console.log('Processing file:', file.name);
+  
+  // This is a simplified version - the actual implementation would parse the file
+  return {
+    variables: [],
+    totalRows: 0,
+    previewRows: []
+  };
+};
+
+// Create project
+export const createProject = (name: string, fileInfo: any, processedData: any) => {
+  const project = {
+    name,
+    id: Date.now().toString(),
+    created: new Date().toISOString(),
+    fileInfo,
+    processedData
+  };
+  
+  localStorage.setItem('currentProject', JSON.stringify(project));
+  
+  // Add to past projects
+  const pastProjects = getPastProjects();
+  pastProjects.unshift(project);
+  localStorage.setItem('pastProjects', JSON.stringify(pastProjects.slice(0, 10))); // Keep last 10
+};
+
 // Calculate statistics for numeric variables
 export const calculateVariableStats = (data: any[], variableName: string) => {
   const values = data
