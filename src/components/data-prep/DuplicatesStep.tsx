@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -7,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
-import { getDatasetPreviewRows } from '@/utils/dataUtils';
+import { getDatasetRows, getDatasetRowCount } from '@/utils/datasetCache';
 
 interface DuplicatesStepProps {
   onComplete: (autoApplied: boolean) => void;
@@ -15,6 +16,10 @@ interface DuplicatesStepProps {
   onBack: () => void;
   showBackButton?: boolean;
   onSkipToSummary?: () => void;
+  onNavigateToStep?: (step: number) => void;
+  currentStep?: number;
+  totalSteps?: number;
+  hideNavigation?: boolean;
 }
 
 interface DuplicateGroup {
@@ -37,7 +42,11 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
   onNext, 
   onBack, 
   showBackButton = true,
-  onSkipToSummary 
+  onSkipToSummary,
+  onNavigateToStep,
+  currentStep,
+  totalSteps,
+  hideNavigation = false
 }) => {
   const [showGuidance, setShowGuidance] = useState(true);
   const [showManualOptions, setShowManualOptions] = useState(false);
@@ -45,58 +54,166 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
   const [completedAutomatic, setCompletedAutomatic] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [inconsistentValues, setInconsistentValues] = useState<InconsistentValue[]>([]);
+  const [analyzing, setAnalyzing] = useState(true);
 
-  // Simulate detection of duplicates and inconsistencies
+  // Analyze actual data for duplicates and inconsistencies
   useEffect(() => {
-    const rows = getDatasetPreviewRows();
-    
-    // For demo purposes, create simulated duplicates
-    const simulatedDuplicates: DuplicateGroup[] = [
-      {
-        id: 1,
-        count: 2,
-        rowIndexes: [14, 87],
-        sampleValues: {
-          respondent_id: '1045',
-          age: '34',
-          gender: 'Male',
-          satisfaction: '4'
-        },
-        selected: true
-      },
-      {
-        id: 2,
-        count: 3,
-        rowIndexes: [22, 56, 129],
-        sampleValues: {
-          respondent_id: '1078',
-          age: '29',
-          gender: 'Female',
-          satisfaction: '5'
-        },
-        selected: true
+    const analyzeData = async () => {
+      setAnalyzing(true);
+      
+      try {
+        // Get all data from the dataset
+        const totalRows = getDatasetRowCount();
+        const pageSize = 100;
+        const totalPages = Math.ceil(totalRows / pageSize);
+        
+        let allRows: any[] = [];
+        
+        // Fetch all data in chunks
+        for (let page = 0; page < totalPages; page++) {
+          const pageRows = getDatasetRows(page, pageSize);
+          allRows = [...allRows, ...pageRows];
+        }
+        
+        console.log(`Analyzing ${allRows.length} rows for duplicates and inconsistencies`);
+        
+        if (allRows.length === 0) {
+          setAnalyzing(false);
+          return;
+        }
+        
+        // Detect duplicates
+        const duplicates = findDuplicateRows(allRows);
+        console.log(`Found ${duplicates.length} duplicate groups`);
+        
+        // Detect inconsistent values
+        const inconsistencies = findInconsistentValues(allRows);
+        console.log(`Found ${inconsistencies.length} inconsistent value patterns`);
+        
+        setDuplicateGroups(duplicates);
+        setInconsistentValues(inconsistencies);
+        
+      } catch (error) {
+        console.error('Error analyzing data:', error);
+      } finally {
+        setAnalyzing(false);
       }
-    ];
+    };
     
-    // For demo purposes, create simulated inconsistent values
-    const simulatedInconsistencies: InconsistentValue[] = [
-      {
-        variable: 'gender',
-        values: ['male', 'Male'],
-        rowIndexes: [8, 17, 42, 65],
-        selected: true
-      },
-      {
-        variable: 'education',
-        values: ['Bachelors degree', "Bachelor's degree"],
-        rowIndexes: [12, 33, 79, 104],
-        selected: true
-      }
-    ];
-    
-    setDuplicateGroups(simulatedDuplicates);
-    setInconsistentValues(simulatedInconsistencies);
+    analyzeData();
   }, []);
+
+  // Function to find duplicate rows
+  const findDuplicateRows = (rows: any[]): DuplicateGroup[] => {
+    const rowGroups = new Map<string, number[]>();
+    
+    rows.forEach((row, index) => {
+      // Create a string representation of the row (excluding null/undefined values)
+      const rowKey = Object.keys(row)
+        .sort()
+        .map(key => `${key}:${row[key] || ''}`)
+        .join('|');
+      
+      if (!rowGroups.has(rowKey)) {
+        rowGroups.set(rowKey, []);
+      }
+      rowGroups.get(rowKey)!.push(index);
+    });
+    
+    // Find groups with more than one row (duplicates)
+    const duplicateGroups: DuplicateGroup[] = [];
+    let groupId = 1;
+    
+    rowGroups.forEach((indexes, rowKey) => {
+      if (indexes.length > 1) {
+        const sampleRow = rows[indexes[0]];
+        const sampleValues: {[key: string]: string} = {};
+        
+        // Get first few non-null values for display
+        Object.keys(sampleRow).slice(0, 4).forEach(key => {
+          sampleValues[key] = String(sampleRow[key] || '');
+        });
+        
+        duplicateGroups.push({
+          id: groupId++,
+          count: indexes.length,
+          rowIndexes: indexes,
+          sampleValues,
+          selected: true
+        });
+      }
+    });
+    
+    return duplicateGroups;
+  };
+
+  // Function to find inconsistent categorical values
+  const findInconsistentValues = (rows: any[]): InconsistentValue[] => {
+    const inconsistencies: InconsistentValue[] = [];
+    
+    if (rows.length === 0) return inconsistencies;
+    
+    // Get column names
+    const columns = Object.keys(rows[0]);
+    
+    columns.forEach(column => {
+      // Get all unique values for this column
+      const values = rows
+        .map(row => row[column])
+        .filter(val => val !== null && val !== undefined && val !== '')
+        .map(val => String(val).trim());
+      
+      const uniqueValues = [...new Set(values)];
+      
+      // Look for case variations and similar strings
+      const variations = findStringVariations(uniqueValues);
+      
+      if (variations.length > 0) {
+        // Get row indexes where these variations occur
+        const affectedRows: number[] = [];
+        rows.forEach((row, index) => {
+          if (variations.includes(String(row[column] || '').trim())) {
+            affectedRows.push(index);
+          }
+        });
+        
+        inconsistencies.push({
+          variable: column,
+          values: variations,
+          rowIndexes: affectedRows,
+          selected: true
+        });
+      }
+    });
+    
+    return inconsistencies;
+  };
+
+  // Function to find string variations (case differences, etc.)
+  const findStringVariations = (values: string[]): string[] => {
+    const groups = new Map<string, string[]>();
+    
+    values.forEach(value => {
+      const normalized = value.toLowerCase().trim();
+      if (!groups.has(normalized)) {
+        groups.set(normalized, []);
+      }
+      groups.get(normalized)!.push(value);
+    });
+    
+    // Find groups with multiple variations
+    for (const [normalized, variations] of groups.entries()) {
+      if (variations.length > 1 && variations.length <= 5) {
+        // Only return if there are reasonable variations (not too many)
+        const uniqueVariations = [...new Set(variations)];
+        if (uniqueVariations.length > 1) {
+          return uniqueVariations.slice(0, 4); // Limit to 4 variations
+        }
+      }
+    }
+    
+    return [];
+  };
   
   const handleAutomaticCleanup = () => {
     setProcessingAutomatic(true);
@@ -104,7 +221,6 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     
     // Simulate AI processing time
     setTimeout(() => {
-      // Keep automatic selections
       setProcessingAutomatic(false);
       setCompletedAutomatic(true);
     }, 1500);
@@ -138,32 +254,81 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
   
   const hasIssues = duplicateGroups.length > 0 || inconsistentValues.length > 0;
 
+  if (analyzing) {
+    return (
+      <StepFlow
+        title="Analyzing Data for Issues"
+        description="Scanning your dataset for duplicate entries and inconsistent values..."
+        onComplete={() => {}}
+        onBack={onBack}
+        showBackButton={showBackButton}
+        onSkipToSummary={onSkipToSummary}
+        onNavigateToStep={onNavigateToStep}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        hideNavigation={hideNavigation}
+        actionInProgress={true}
+        completeButtonText="Analyzing..."
+      >
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700 mx-auto mb-4"></div>
+          <p className="text-gray-600">Please wait while we analyze your data...</p>
+        </div>
+      </StepFlow>
+    );
+  }
+
   if (showGuidance) {
     if (!hasIssues) {
       return (
-        <Alert className="mb-6 bg-green-50 border-green-200">
-          <Check className="h-4 w-4 text-green-600" />
-          <AlertTitle>No Data Issues Detected</AlertTitle>
-          <AlertDescription>
-            Great news! We didn't detect any duplicate entries or inconsistent values in your dataset.
-          </AlertDescription>
-        </Alert>
+        <StepFlow
+          title="No Data Issues Detected"
+          description="Great news! We didn't detect any duplicate entries or inconsistent values in your dataset."
+          onComplete={handleComplete}
+          onBack={onBack}
+          showBackButton={showBackButton}
+          onSkipToSummary={onSkipToSummary}
+          onNavigateToStep={onNavigateToStep}
+          currentStep={currentStep}
+          totalSteps={totalSteps}
+          hideNavigation={hideNavigation}
+          completeButtonText="Continue to Next Step"
+        >
+          <Alert className="mb-6 bg-green-50 border-green-200">
+            <Check className="h-4 w-4 text-green-600" />
+            <AlertTitle>Excellent Data Quality</AlertTitle>
+            <AlertDescription>
+              Your dataset appears to be clean with no duplicate entries or inconsistent categorical values detected.
+            </AlertDescription>
+          </Alert>
+        </StepFlow>
       );
     }
     
     return (
-      <AIGuidance
+      <StepFlow
         title="Fix Duplicates & Inconsistencies"
-        description={
-          `We found ${duplicateGroups.length} duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`
-        }
-        automaticDescription="AI will remove exact duplicates and standardize inconsistent values using intelligent pattern recognition."
-        manualDescription="Review each issue individually and decide how to handle duplicates and standardize values."
-        onAutomatic={handleAutomaticCleanup}
-        onManual={handleManualReview}
-        actionInProgress={processingAutomatic}
-        icon={<CopyX className="h-6 w-6 text-red-500" />}
-      />
+        description={`We found ${duplicateGroups.length} duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
+        onComplete={() => {}}
+        onBack={onBack}
+        showBackButton={showBackButton}
+        onSkipToSummary={onSkipToSummary}
+        onNavigateToStep={onNavigateToStep}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        hideNavigation={hideNavigation}
+      >
+        <AIGuidance
+          title="Fix Duplicates & Inconsistencies"
+          description={`We found ${duplicateGroups.length} duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
+          automaticDescription="AI will remove exact duplicates and standardize inconsistent values using intelligent pattern recognition."
+          manualDescription="Review each issue individually and decide how to handle duplicates and standardize values."
+          onAutomatic={handleAutomaticCleanup}
+          onManual={handleManualReview}
+          actionInProgress={processingAutomatic}
+          icon={<CopyX className="h-6 w-6 text-red-500" />}
+        />
+      </StepFlow>
     );
   }
 
@@ -178,6 +343,11 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
+        onSkipToSummary={onSkipToSummary}
+        onNavigateToStep={onNavigateToStep}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        hideNavigation={hideNavigation}
         completeButtonText="Continue to Next Step"
       >
         <Alert className="mb-4 bg-green-50 border-green-200">
@@ -270,6 +440,11 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         onCancel={() => setShowGuidance(true)}
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
+        onSkipToSummary={onSkipToSummary}
+        onNavigateToStep={onNavigateToStep}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        hideNavigation={hideNavigation}
         completeButtonText="Apply & Continue"
       >
         {duplicateGroups.length > 0 && (
