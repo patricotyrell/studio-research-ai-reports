@@ -14,10 +14,12 @@ import InsightsPanel from '@/components/visualization/InsightsPanel';
 import { getDatasetForAnalysis, getCurrentDatasetState } from '@/utils/dataUtils';
 import { getDatasetInfo } from '@/utils/datasetCache';
 
+type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
+
 const Visualization = () => {
   const [explorationMode, setExplorationMode] = useState<'guided' | 'custom'>('guided');
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
-  const [chartType, setChartType] = useState<string>('');
+  const [chartType, setChartType] = useState<ChartType>('bar');
   const [isValidConfiguration, setIsValidConfiguration] = useState(false);
   const [dataset, setDataset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ const Visualization = () => {
 
   const handleChartTypeSelect = (type: string) => {
     console.log('📊 Chart type selected:', type);
-    setChartType(type);
+    setChartType(type as ChartType);
   };
 
   const handleValidationChange = (isValid: boolean) => {

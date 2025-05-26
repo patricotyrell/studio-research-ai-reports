@@ -10,68 +10,68 @@ import {
 } from "@/components/ui/select";
 import { DataVariable } from '@/services/sampleDataService';
 
-type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
-
 interface VariableSelectorProps {
-  explorationMode: ExplorationMode;
-  primaryVariable: string;
-  secondaryVariable: string;
   variables: DataVariable[];
-  onPrimaryVariableChange: (value: string) => void;
-  onSecondaryVariableChange: (value: string) => void;
+  selectedVariables: string[];
+  onVariableSelect: (variables: string[]) => void;
+  mode: 'guided' | 'custom';
 }
 
 const VariableSelector: React.FC<VariableSelectorProps> = ({
-  explorationMode,
-  primaryVariable,
-  secondaryVariable,
   variables,
-  onPrimaryVariableChange,
-  onSecondaryVariableChange,
+  selectedVariables,
+  onVariableSelect,
+  mode,
 }) => {
   // Create a unique key based on variables to force re-render when they change
   const variablesKey = variables.map(v => `${v.name}-${v.type}`).join('|');
   
+  const handlePrimaryVariableChange = (value: string) => {
+    const newSelection = [value, selectedVariables[1]].filter(Boolean);
+    onVariableSelect(newSelection);
+  };
+
+  const handleSecondaryVariableChange = (value: string) => {
+    const newSelection = [selectedVariables[0], value].filter(Boolean);
+    onVariableSelect(newSelection);
+  };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="space-y-2">
-        <Label htmlFor="primary-variable">
-          {explorationMode === 'distribution' ? 'Variable to analyze:' : 
-           explorationMode === 'relationship' ? 'First variable:' : 
-           'Grouping variable:'}
-        </Label>
-        <Select 
-          value={primaryVariable} 
-          onValueChange={onPrimaryVariableChange}
-          key={`primary-${variablesKey}`}
-        >
-          <SelectTrigger id="primary-variable" className="bg-white">
-            <SelectValue placeholder="Select variable" />
-          </SelectTrigger>
-          <SelectContent className="bg-white">
-            {variables.map(variable => (
-              <SelectItem key={`primary-${variable.name}`} value={variable.name}>
-                {variable.name} ({variable.type})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      
-      {explorationMode !== 'distribution' && (
+    <div className="space-y-4">
+      <h3 className="text-lg font-medium">Select Variables</h3>
+      <div className="grid grid-cols-1 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="secondary-variable">
-            {explorationMode === 'relationship' ? 'Second variable:' : 'Measure to compare:'}
-          </Label>
+          <Label htmlFor="primary-variable">Primary Variable</Label>
           <Select 
-            value={secondaryVariable} 
-            onValueChange={onSecondaryVariableChange}
+            value={selectedVariables[0] || ''} 
+            onValueChange={handlePrimaryVariableChange}
+            key={`primary-${variablesKey}`}
+          >
+            <SelectTrigger id="primary-variable" className="bg-white">
+              <SelectValue placeholder="Select primary variable" />
+            </SelectTrigger>
+            <SelectContent className="bg-white">
+              {variables.map(variable => (
+                <SelectItem key={`primary-${variable.name}`} value={variable.name}>
+                  {variable.name} ({variable.type})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="secondary-variable">Secondary Variable (Optional)</Label>
+          <Select 
+            value={selectedVariables[1] || ''} 
+            onValueChange={handleSecondaryVariableChange}
             key={`secondary-${variablesKey}`}
           >
             <SelectTrigger id="secondary-variable" className="bg-white">
-              <SelectValue placeholder="Select variable" />
+              <SelectValue placeholder="Select secondary variable" />
             </SelectTrigger>
             <SelectContent className="bg-white">
+              <SelectItem value="">None</SelectItem>
               {variables.map(variable => (
                 <SelectItem key={`secondary-${variable.name}`} value={variable.name}>
                   {variable.name} ({variable.type})
@@ -80,7 +80,7 @@ const VariableSelector: React.FC<VariableSelectorProps> = ({
             </SelectContent>
           </Select>
         </div>
-      )}
+      </div>
     </div>
   );
 };

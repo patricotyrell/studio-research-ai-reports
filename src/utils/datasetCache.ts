@@ -39,8 +39,8 @@ const generateSessionId = () => {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// CRITICAL: Dataset logging function for debugging
-const logDatasetState = (context: string, additionalInfo?: any) => {
+// CRITICAL: Dataset logging function for debugging - NOW EXPORTED
+export const logDatasetState = (context: string, additionalInfo?: any) => {
   const state = {
     context,
     sessionId: datasetCache.sessionId,
