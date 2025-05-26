@@ -30,75 +30,56 @@ export const getCurrentDatasetState = () => {
   };
 };
 
-// Get dataset specifically for analysis/visualization
+// CRITICAL: Get dataset specifically for analysis/visualization - NEVER override real data
 export const getDatasetForAnalysis = () => {
-  console.log('🎯 getDatasetForAnalysis called');
+  console.log('🎯 VISUALIZATION MODULE - getDatasetForAnalysis called');
   
-  // First, try to get current dataset state
+  // First, get current dataset state
   const currentState = getCurrentDatasetState();
+  const datasetInfo = getDatasetInfo();
   
-  // Check if we have valid data
-  const hasValidData = currentState.variables && 
-                      currentState.variables.length > 0 && 
-                      currentState.rows && 
-                      currentState.rows.length > 0;
+  // CRITICAL: Log the exact state we're working with
+  console.log('📊 VISUALIZATION MODULE - Dataset loaded:', {
+    source: datasetInfo.fileName || 'Unknown',
+    rowCount: currentState.rows.length,
+    variableCount: currentState.variables.length,
+    isRealData: currentState.isRealData,
+    sessionId: currentState.sessionId,
+    locked: datasetInfo.locked
+  });
   
-  if (hasValidData) {
-    console.log('✅ Valid dataset found for analysis');
-    return currentState;
+  // Check if we have valid real data
+  const hasValidRealData = currentState.variables && 
+                          currentState.variables.length > 0 && 
+                          currentState.rows && 
+                          currentState.rows.length > 0 &&
+                          currentState.isRealData;
+  
+  if (hasValidRealData) {
+    console.log('✅ VISUALIZATION MODULE - Real dataset found and will be used');
+    console.log(`📈 Using ${currentState.rows.length} rows from ${datasetInfo.fileName}`);
+    
+    return {
+      variables: currentState.variables,
+      rows: currentState.rows,
+      metadata: currentState.metadata,
+      prepChanges: currentState.prepChanges,
+      isRealData: true,
+      sessionId: currentState.sessionId,
+      source: 'REAL_DATA_CACHE'
+    };
   }
   
-  console.log('⚠️ No valid dataset found, creating sample data for demonstration');
+  // CRITICAL: If no real data found, DO NOT create sample data - return null
+  console.error('❌ VISUALIZATION MODULE - No real dataset found');
+  console.error('📋 Available data:', {
+    variables: currentState.variables.length,
+    rows: currentState.rows.length,
+    isRealData: currentState.isRealData,
+    metadata: currentState.metadata
+  });
   
-  // Create comprehensive sample data
-  const sampleRows = [];
-  for (let i = 0; i < 50; i++) {
-    sampleRows.push({
-      ID: i + 1,
-      Name: `Person ${i + 1}`,
-      Age: 20 + Math.floor(Math.random() * 50),
-      Gender: i % 2 === 0 ? 'Male' : 'Female',
-      City: ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'][i % 5],
-      Income: 30000 + Math.floor(Math.random() * 70000),
-      Education: ['High School', 'Bachelor', 'Master', 'PhD'][i % 4],
-      Experience: Math.floor(Math.random() * 20),
-      Satisfaction: Math.floor(Math.random() * 10) + 1
-    });
-  }
-  
-  const sampleVariables: DataVariable[] = [
-    { name: 'ID', type: 'numeric', missing: 0, unique: 50, example: '1' },
-    { name: 'Name', type: 'text', missing: 0, unique: 50, example: 'Person 1' },
-    { name: 'Age', type: 'numeric', missing: 0, unique: 40, example: '25' },
-    { name: 'Gender', type: 'categorical', missing: 0, unique: 2, example: 'Male' },
-    { name: 'City', type: 'categorical', missing: 0, unique: 5, example: 'New York' },
-    { name: 'Income', type: 'numeric', missing: 0, unique: 50, example: '50000' },
-    { name: 'Education', type: 'categorical', missing: 0, unique: 4, example: 'Bachelor' },
-    { name: 'Experience', type: 'numeric', missing: 0, unique: 20, example: '5' },
-    { name: 'Satisfaction', type: 'numeric', missing: 0, unique: 10, example: '7' }
-  ];
-  
-  // Store in cache
-  setDatasetCache(sampleRows, sampleVariables, {
-    fileName: 'Sample Dataset for Visualization',
-    totalRows: sampleRows.length,
-    totalColumns: sampleVariables.length,
-    uploadedAt: new Date().toISOString()
-  }, false);
-  
-  return {
-    variables: sampleVariables,
-    rows: sampleRows,
-    metadata: {
-      fileName: 'Sample Dataset for Visualization',
-      totalRows: sampleRows.length,
-      totalColumns: sampleVariables.length,
-      uploadedAt: new Date().toISOString()
-    },
-    prepChanges: {},
-    isRealData: false,
-    sessionId: 'sample_' + Date.now()
-  };
+  return null;
 };
 
 // Re-export from datasetCache with proper export

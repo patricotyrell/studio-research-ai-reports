@@ -4,7 +4,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StepIndicator from '@/components/StepIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, AlertTriangle } from 'lucide-react';
+import { Info, AlertTriangle, ArrowLeft, Upload } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import ExplorationModeSelector from '@/components/visualization/ExplorationModeSelector';
 import VariableSelector from '@/components/visualization/VariableSelector';
@@ -25,33 +25,46 @@ const Visualization = () => {
   const [isValidConfiguration, setIsValidConfiguration] = useState(false);
   const [dataset, setDataset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🎨 VISUALIZATION - Loading data');
+    console.log('🎨 VISUALIZATION MODULE - Component mounted, loading data');
     
     try {
       const analysisDataset = getDatasetForAnalysis();
-      console.log('📊 Dataset loaded:', {
-        variables: analysisDataset.variables?.length || 0,
-        rows: analysisDataset.rows?.length || 0,
-        isRealData: analysisDataset.isRealData
-      });
       
-      setDataset(analysisDataset);
+      if (!analysisDataset) {
+        console.error('❌ VISUALIZATION MODULE - No dataset available');
+        setDataError('NO_DATASET');
+        setDataset(null);
+      } else {
+        console.log('✅ VISUALIZATION MODULE - Dataset successfully loaded:', {
+          source: analysisDataset.source || 'Unknown',
+          variables: analysisDataset.variables?.length || 0,
+          rows: analysisDataset.rows?.length || 0,
+          isRealData: analysisDataset.isRealData,
+          fileName: analysisDataset.metadata?.fileName
+        });
+        
+        setDataset(analysisDataset);
+        setDataError(null);
+      }
     } catch (error) {
-      console.error('❌ Error loading dataset:', error);
+      console.error('❌ VISUALIZATION MODULE - Error loading dataset:', error);
+      setDataError('LOAD_ERROR');
+      setDataset(null);
     }
     
     setLoading(false);
   }, []);
 
   const handleVariableSelect = (variables: string[]) => {
-    console.log('📊 Variables selected:', variables);
+    console.log('📊 VISUALIZATION MODULE - Variables selected:', variables);
     setSelectedVariables(variables);
   };
 
   const handleChartTypeSelect = (type: string) => {
-    console.log('📊 Chart type selected:', type);
+    console.log('📊 VISUALIZATION MODULE - Chart type selected:', type);
     setChartType(type as ChartType);
   };
 
@@ -72,29 +85,101 @@ const Visualization = () => {
     );
   }
 
-  if (!dataset || !dataset.variables || dataset.variables.length === 0) {
+  // CRITICAL: Handle no dataset case with clear user guidance
+  if (dataError === 'NO_DATASET' || !dataset) {
     return (
       <DashboardLayout>
         <div className="p-6">
-          <Alert className="max-w-2xl mx-auto border-yellow-200 bg-yellow-50">
-            <Info className="h-4 w-4 text-yellow-600" />
-            <AlertDescription>
-              <div className="space-y-3">
-                <p className="font-medium text-yellow-800">No data available for visualization</p>
-                <p className="text-yellow-700">
-                  Sample data has been loaded for demonstration. Upload your own data to create real visualizations.
-                </p>
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={() => navigate('/upload')} size="sm">
-                    Upload Data
-                  </Button>
-                  <Button onClick={() => navigate('/sample-data')} size="sm" variant="outline">
-                    Try Sample Data
-                  </Button>
+          <StepIndicator 
+            currentStep={4} 
+            steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
+          />
+          
+          <div className="max-w-2xl mx-auto mt-6">
+            <Alert className="border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription>
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-medium text-red-800 mb-2">No Dataset Found</p>
+                    <p className="text-red-700">
+                      We couldn't find any uploaded dataset to visualize. This could happen if:
+                    </p>
+                    <ul className="list-disc list-inside text-red-700 mt-2 space-y-1">
+                      <li>No data file has been uploaded yet</li>
+                      <li>The dataset was cleared during navigation</li>
+                      <li>There was an error processing your data</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <Button 
+                      onClick={() => navigate('/upload')} 
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Data
+                    </Button>
+                    <Button 
+                      onClick={() => navigate('/data-preparation')} 
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back to Data Prep
+                    </Button>
+                    <Button 
+                      onClick={() => navigate('/sample-data')} 
+                      variant="outline"
+                    >
+                      Try Sample Data
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </AlertDescription>
-          </Alert>
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Validate dataset structure
+  if (!dataset.variables || dataset.variables.length === 0 || !dataset.rows || dataset.rows.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <StepIndicator 
+            currentStep={4} 
+            steps={['Upload', 'Overview', 'Preparation', 'Visualization', 'Analysis', 'Report']} 
+          />
+          
+          <div className="max-w-2xl mx-auto mt-6">
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <Info className="h-4 w-4 text-yellow-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <p className="font-medium text-yellow-800">Invalid Dataset Structure</p>
+                  <p className="text-yellow-700">
+                    The dataset exists but has structural issues:
+                  </p>
+                  <ul className="list-disc list-inside text-yellow-700 space-y-1">
+                    <li>Variables: {dataset.variables?.length || 0}</li>
+                    <li>Rows: {dataset.rows?.length || 0}</li>
+                    <li>Source: {dataset.metadata?.fileName || 'Unknown'}</li>
+                  </ul>
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={() => navigate('/data-preparation')} size="sm">
+                      Return to Data Prep
+                    </Button>
+                    <Button onClick={() => navigate('/upload')} size="sm" variant="outline">
+                      Upload New Data
+                    </Button>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -114,9 +199,11 @@ const Visualization = () => {
             <p className="text-gray-600">
               Create insightful visualizations to explore patterns and relationships in your data.
             </p>
-            <div className="text-xs text-gray-400 mt-2 font-mono">
+            <div className="text-xs text-gray-400 mt-2 font-mono bg-gray-100 p-2 rounded">
               📊 Dataset: {dataset.rows.length} rows, {dataset.variables.length} variables
-              | {dataset.isRealData ? "Real Data" : "Sample Data"}
+              | Source: {dataset.metadata?.fileName || 'Unknown'}
+              | Type: {dataset.isRealData ? "🔴 Real Data" : "🟡 Sample Data"}
+              | Session: {dataset.sessionId?.slice(-8) || 'N/A'}
             </div>
           </div>
 
