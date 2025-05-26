@@ -15,6 +15,7 @@ interface StepFlowProps {
   actionInProgress?: boolean;
   completeButtonText?: string;
   onSkipToSummary?: () => void;
+  onNavigateToStep?: (step: number) => void;
   currentStep?: number;
   totalSteps?: number;
   hideNavigation?: boolean;
@@ -31,6 +32,7 @@ const StepFlow: React.FC<StepFlowProps> = ({
   actionInProgress = false,
   completeButtonText = "Apply Changes",
   onSkipToSummary,
+  onNavigateToStep,
   currentStep,
   totalSteps,
   hideNavigation = false

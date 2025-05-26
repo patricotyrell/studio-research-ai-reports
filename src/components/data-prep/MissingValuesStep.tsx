@@ -15,6 +15,7 @@ interface MissingValuesStepProps {
   onNext: () => void;
   onBack: () => void;
   onSkipToSummary: () => void;
+  onNavigateToStep?: (step: number) => void;
   showBackButton?: boolean;
   currentStep?: number;
   totalSteps?: number;
@@ -38,6 +39,7 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
   onNext, 
   onBack, 
   onSkipToSummary, 
+  onNavigateToStep,
   showBackButton = true,
   currentStep,
   totalSteps
@@ -148,13 +150,14 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
   if (variables.length === 0) {
     return (
       <StepFlow
-        title="Handle Missing Values"
+        title="Handle Missing Values & Data Issues"
         description="Missing values can bias your results. Choose how to handle variables with missing data."
         onComplete={handleComplete}
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
         completeButtonText="Continue to Next Step"
         onSkipToSummary={onSkipToSummary}
+        onNavigateToStep={onNavigateToStep}
         currentStep={currentStep}
         totalSteps={totalSteps}
       >

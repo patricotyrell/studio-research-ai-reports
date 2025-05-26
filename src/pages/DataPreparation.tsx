@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import StepIndicator from '@/components/StepIndicator';
-import { Info } from 'lucide-react';
+import { Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import MissingValuesStep from '@/components/data-prep/MissingValuesStep';
 import RecodeVariablesStep from '@/components/data-prep/RecodeVariablesStep';
 import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
@@ -65,6 +66,10 @@ const DataPreparation = () => {
   const handleSkipToSummary = () => {
     setCurrentStep(7);
   };
+
+  const handleNavigateToStep = (step: number) => {
+    setCurrentStep(step);
+  };
   
   const handleFinish = () => {
     setLoading(true);
@@ -86,6 +91,7 @@ const DataPreparation = () => {
       onNext: handleNext,
       onBack: handleBack,
       onSkipToSummary: handleSkipToSummary,
+      onNavigateToStep: handleNavigateToStep,
       currentStep,
       totalSteps: TOTAL_STEPS
     };
@@ -164,13 +170,58 @@ const DataPreparation = () => {
           </div>
           
           {currentStep < 7 && (
-            <Alert className="mb-6 bg-blue-50 border-blue-200">
-              <Info className="h-4 w-4 text-blue-600" />
-              <AlertTitle>Step {currentStep} of {TOTAL_STEPS}: {getStepTitle(currentStep)}</AlertTitle>
-              <AlertDescription>
-                {getStepDescription(currentStep)}
-              </AlertDescription>
-            </Alert>
+            <>
+              <Alert className="mb-6 bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle>Step {currentStep} of {TOTAL_STEPS}: {getStepTitle(currentStep)}</AlertTitle>
+                <AlertDescription>
+                  {getStepDescription(currentStep)}
+                </AlertDescription>
+              </Alert>
+
+              {/* Step Navigation */}
+              <div className="mb-6 flex items-center justify-between bg-gray-50 p-4 rounded-lg border">
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={currentStep === 1}
+                  className="flex items-center gap-2"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous Step
+                </Button>
+                
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((step) => (
+                    <Button
+                      key={step}
+                      variant={step === currentStep ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleNavigateToStep(step)}
+                      className={`w-10 h-10 p-0 ${
+                        step === currentStep 
+                          ? "bg-research-700 hover:bg-research-800" 
+                          : completedSteps[Object.keys(completedSteps)[step - 1] as keyof typeof completedSteps]
+                            ? "bg-green-100 text-green-800 border-green-300 hover:bg-green-200"
+                            : ""
+                      }`}
+                    >
+                      {step}
+                    </Button>
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={handleNext}
+                  disabled={currentStep === TOTAL_STEPS}
+                  className="flex items-center gap-2"
+                >
+                  Next Step
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </>
           )}
           
           <Card className="mb-6">
