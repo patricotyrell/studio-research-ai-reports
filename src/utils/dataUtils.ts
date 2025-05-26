@@ -382,18 +382,34 @@ export const loadDataChunk = async (startRow: number, rowCount: number): Promise
   const fileType = sessionStorage.getItem('uploadedFileType');
   
   if (!fileUrl || !fileName) {
-    console.log('No file URL found, returning empty array');
+    console.log('No file URL found, checking localStorage for processedData');
+    // Try to get data from localStorage as fallback
+    const processedData = localStorage.getItem('processedData');
+    if (processedData) {
+      const data = JSON.parse(processedData);
+      const allRows = data.previewRows || [];
+      const requestedRows = allRows.slice(startRow, startRow + rowCount);
+      console.log(`Returning ${requestedRows.length} rows from localStorage`);
+      return requestedRows;
+    }
     return [];
   }
   
   // Create and store the loading promise
   const loadingPromise = (async () => {
     try {
-      console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount}`);
+      console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount} from ${fileType} file`);
       
       if (fileType === 'excel') {
         // For Excel files, we need to handle differently
-        console.log('Excel chunked loading not fully implemented yet, returning empty array');
+        console.log('Excel chunked loading not fully implemented yet, using fallback');
+        const processedData = localStorage.getItem('processedData');
+        if (processedData) {
+          const data = JSON.parse(processedData);
+          const allRows = data.previewRows || [];
+          const requestedRows = allRows.slice(startRow, startRow + rowCount);
+          return requestedRows;
+        }
         return [];
       }
       
@@ -417,21 +433,23 @@ export const loadDataChunk = async (startRow: number, rowCount: number): Promise
       const startIndex = Math.max(0, startRow);
       const endIndex = Math.min(dataLines.length, startRow + rowCount);
       
-      console.log(`Processing lines ${startIndex} to ${endIndex} of ${dataLines.length} total data lines`);
+      console.log(`Processing CSV lines ${startIndex} to ${endIndex} of ${dataLines.length} total data lines`);
       
       const rows = [];
       for (let i = startIndex; i < endIndex; i++) {
-        try {
-          const values = parseCSVLine(dataLines[i]);
-          const row: any = {};
-          headers.forEach((header, index) => {
-            const value = values[index] || null;
-            row[header] = value === '' ? null : value;
-          });
-          rows.push(row);
-        } catch (lineError) {
-          console.warn(`Error parsing line ${i + 1}:`, lineError);
-          // Continue with other lines
+        if (i < dataLines.length) {
+          try {
+            const values = parseCSVLine(dataLines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            rows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i + 1}:`, lineError);
+            // Continue with other lines
+          }
         }
       }
       
@@ -463,7 +481,7 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     return [];
   }
   
-  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
+  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}, total rows: ${fileInfo.rows}`);
   
   // First try prepared data (post data-prep)
   const preparedData = getPreparedDataRows();
@@ -478,6 +496,7 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     const sampleData = getSampleDataset(fileInfo.id);
     const baseRows = sampleData?.previewRows || [];
     if (baseRows.length > 0) {
+      console.log('Using sample data, generating extended rows');
       // Generate extended sample data for demonstration
       const extendedRows = [];
       const totalToGenerate = Math.min(1000, fileInfo.rows || 100);
@@ -506,15 +525,9 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
   // For uploaded files, implement optimized chunked loading
   try {
     const startRow = page * rowsPerPage;
-    console.log(`Loading chunk: rows ${startRow} to ${startRow + rowsPerPage}`);
+    console.log(`Attempting to load chunk: rows ${startRow} to ${startRow + rowsPerPage}`);
     
-    // Use Promise.race to implement timeout handling
-    const loadPromise = loadDataChunk(startRow, rowsPerPage);
-    const timeoutPromise = new Promise<any[]>((_, reject) => {
-      setTimeout(() => reject(new Error('Loading timeout')), 7000);
-    });
-    
-    const rows = await Promise.race([loadPromise, timeoutPromise]);
+    const rows = await loadDataChunk(startRow, rowsPerPage);
     
     console.log(`Successfully loaded ${rows.length} rows for page ${page}`);
     return rows;
@@ -522,9 +535,20 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
   } catch (error) {
     console.error('Error in getFullDatasetRows:', error);
     
-    // Return empty array for timeout/error cases to prevent UI crash
-    if (error instanceof Error && error.message.includes('timeout')) {
-      console.log('Timeout occurred, returning empty array');
+    // Try fallback to processedData in localStorage
+    console.log('Trying fallback to processedData');
+    const processedData = localStorage.getItem('processedData');
+    if (processedData) {
+      try {
+        const data = JSON.parse(processedData);
+        const allRows = data.previewRows || [];
+        const startIndex = page * rowsPerPage;
+        const fallbackRows = allRows.slice(startIndex, startIndex + rowsPerPage);
+        console.log(`Fallback returned ${fallbackRows.length} rows`);
+        return fallbackRows;
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+      }
     }
     
     return [];

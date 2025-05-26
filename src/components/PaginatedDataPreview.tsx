@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,8 @@ const PaginatedDataPreview: React.FC = () => {
     fileInfo: fileInfo?.name,
     currentPage,
     loading,
-    initialLoad
+    initialLoad,
+    currentRowsCount: currentRows.length
   });
   
   // Optimized data loading function with better error handling
@@ -37,32 +39,23 @@ const PaginatedDataPreview: React.FC = () => {
     try {
       console.log(`Loading page ${page} data...`);
       
-      // For large datasets, implement background loading with shorter timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 8000); // 8 second timeout
-      
       const rows = await getFullDatasetRows(page, rowsPerPage);
-      clearTimeout(timeoutId);
       
-      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows');
+      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows', rows);
       
-      setCurrentRows(rows);
-      setError(null);
+      if (rows.length === 0 && page === 0) {
+        setError('No data found. Please check your file format and try again.');
+      } else {
+        setCurrentRows(rows);
+        setError(null);
+      }
       
     } catch (error) {
       console.error('Error loading page data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+      setError(`Loading failed: ${errorMessage}`);
       
-      // For timeout or loading issues, provide graceful fallback
-      if (errorMessage.includes('timeout') || errorMessage.includes('abort')) {
-        setError('Preview is taking longer than expected. The data is still being processed.');
-      } else {
-        setError(errorMessage);
-      }
-      
-      // Don't clear rows on error, keep previous data if available
+      // Don't clear rows on error if we have some data
       if (currentRows.length === 0) {
         setCurrentRows([]);
       }
@@ -91,6 +84,7 @@ const PaginatedDataPreview: React.FC = () => {
   // Retry function
   const handleRetry = useCallback(() => {
     console.log('Retrying data load');
+    setError(null);
     loadPageData(currentPage);
   }, [currentPage, loadPageData]);
   
@@ -145,34 +139,21 @@ const PaginatedDataPreview: React.FC = () => {
       </CardHeader>
       <CardContent className="p-0">
         {/* Loading State */}
-        {loading && initialLoad ? (
-          <div className="flex flex-col items-center justify-center h-40 p-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700 mb-3"></div>
-            <span className="text-gray-600 text-sm">Loading preview...</span>
-            <span className="text-gray-400 text-xs mt-1">
-              {isLargeDataset ? 'Processing large dataset in background' : 'Preparing data preview'}
-            </span>
-          </div>
-        ) : loading ? (
-          <div className="flex items-center justify-center h-20 p-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-32 p-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-research-700 mr-2"></div>
-            <span className="text-gray-600 text-sm">Loading page {currentPage + 1}...</span>
+            <span className="text-gray-600 text-sm">
+              {initialLoad ? 'Loading preview...' : `Loading page ${currentPage + 1}...`}
+            </span>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-40 p-6">
-            <div className="text-amber-600 text-sm mb-2">Preview Loading Issue</div>
+            <div className="text-red-600 text-sm mb-2">Preview Error</div>
             <div className="text-gray-500 text-xs mb-4 text-center max-w-md">{error}</div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleRetry}>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Retry Preview
-              </Button>
-              {currentPage > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(0)}>
-                  First Page
-                </Button>
-              )}
-            </div>
+            <Button variant="outline" size="sm" onClick={handleRetry}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry Preview
+            </Button>
           </div>
         ) : currentRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 p-6">
