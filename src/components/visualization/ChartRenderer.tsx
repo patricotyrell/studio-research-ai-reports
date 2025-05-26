@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Brush } from 'recharts';
 import { BarChart as BarChartIcon, TableIcon } from 'lucide-react';
@@ -87,7 +86,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
     }
 
     // For other chart types, create frequency distribution
-    const counts = {};
+    const counts: Record<string, number> = {};
     data.forEach(row => {
       const value = row[primaryVariable];
       if (value !== undefined && value !== null && value !== '') {
