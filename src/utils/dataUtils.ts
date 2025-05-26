@@ -1,4 +1,3 @@
-
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 import { 
@@ -12,6 +11,66 @@ import {
   clearDatasetCache,
   initializeSampleDataCache
 } from './datasetCache';
+
+// Helper function to check if a value is numeric
+const isNumeric = (value: any): boolean => {
+  if (value === null || value === undefined || value === '') return false;
+  return !isNaN(Number(value)) && isFinite(Number(value));
+};
+
+// Enhanced variable analysis with improved numeric detection
+const analyzeVariable = (header: string, values: any[]): DataVariable => {
+  const nonEmptyValues = values.filter(v => v !== null && v !== '' && v !== undefined);
+  const uniqueValues = [...new Set(nonEmptyValues)];
+  const missingCount = values.length - nonEmptyValues.length;
+  
+  // Check numeric percentage
+  const numericValues = nonEmptyValues.filter(v => isNumeric(v));
+  const numericPercentage = nonEmptyValues.length > 0 ? (numericValues.length / nonEmptyValues.length) * 100 : 0;
+  
+  let type: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
+  let invalidValues: string[] = [];
+  
+  // Enhanced numeric detection: if 90% or more values are numeric, treat as numeric
+  if (numericPercentage >= 90 && nonEmptyValues.length > 0) {
+    type = 'numeric';
+    // Collect non-numeric values as invalid
+    invalidValues = nonEmptyValues
+      .filter(v => !isNumeric(v))
+      .map(v => String(v))
+      .filter((v, i, arr) => arr.indexOf(v) === i) // Remove duplicates
+      .slice(0, 10); // Limit to first 10 unique invalid values
+  } else if (uniqueValues.length <= 10 && nonEmptyValues.length > uniqueValues.length * 2) {
+    type = 'categorical';
+  } else if (nonEmptyValues.some(v => /^\d{4}-\d{2}-\d{2}/.test(String(v)))) {
+    type = 'date';
+  }
+
+  const coding: { [key: string]: number } = {};
+  if (type === 'categorical') {
+    uniqueValues.forEach((value, index) => {
+      coding[String(value)] = index;
+    });
+  }
+  
+  const result: DataVariable = {
+    name: header,
+    type,
+    missing: missingCount,
+    unique: uniqueValues.length,
+    example: nonEmptyValues[0] ? String(nonEmptyValues[0]) : 'N/A',
+    coding: type === 'categorical' ? coding : undefined,
+    originalCategories: type === 'categorical' ? uniqueValues.map(v => String(v)) : undefined
+  };
+
+  // Add numeric-specific properties if it's a numeric column with invalid values
+  if (type === 'numeric' && invalidValues.length > 0) {
+    result.invalidValues = invalidValues;
+    result.numericPercentage = numericPercentage;
+  }
+
+  return result;
+};
 
 // Helper function to check if in demo mode
 export const isDemoMode = () => {
@@ -290,7 +349,7 @@ const parseCSVLine = (line: string): string[] => {
   return result.map(field => field.replace(/^"|"$/g, ''));
 };
 
-// Optimized CSV processing with simplified storage
+// Enhanced CSV processing with improved type detection
 export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -330,44 +389,13 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
         
         console.log('Successfully processed', allRows.length, 'rows');
         
-        // Analyze variables based on sample
+        // Analyze variables using enhanced logic
         const sampleSize = Math.min(1000, allRows.length);
         const sampleRows = allRows.slice(0, sampleSize);
         
         const variables: DataVariable[] = headers.map(header => {
-          const values = sampleRows.map(row => row[header]).filter(v => v !== null && v !== '');
-          const uniqueValues = [...new Set(values)];
-          const missingCount = sampleRows.length - values.length;
-          
-          // Determine variable type
-          let type: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
-          
-          // Check if numeric
-          const numericValues = values.filter(v => !isNaN(Number(v)) && v !== '');
-          if (numericValues.length === values.length && values.length > 0) {
-            type = 'numeric';
-          } else if (uniqueValues.length <= 10 && values.length > uniqueValues.length * 2) {
-            type = 'categorical';
-          } else if (values.some(v => /^\d{4}-\d{2}-\d{2}/.test(v))) {
-            type = 'date';
-          }
-
-          const coding: { [key: string]: number } = {};
-          if (type === 'categorical') {
-            uniqueValues.forEach((value, index) => {
-              coding[value] = index;
-            });
-          }
-          
-          return {
-            name: header,
-            type,
-            missing: missingCount,
-            unique: uniqueValues.length,
-            example: values[0] || 'N/A',
-            coding: type === 'categorical' ? coding : undefined,
-            originalCategories: type === 'categorical' ? uniqueValues : undefined
-          };
+          const values = sampleRows.map(row => row[header]);
+          return analyzeVariable(header, values);
         });
         
         const previewRows = allRows.slice(0, 5);
@@ -509,8 +537,20 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   
   switch (stepType) {
     case 'missingValues':
-      // Mark that missing values have been handled
-      updatedVars = updatedVars.map(v => ({ ...v, missing: 0 }));
+      // Mark that missing values have been handled and clean up invalid values for numeric columns
+      updatedVars = updatedVars.map(v => {
+        if (v.type === 'numeric' && v.invalidValues && changes.invalidValueHandling) {
+          const handling = changes.invalidValueHandling[v.name];
+          if (handling === 'null') {
+            // Convert invalid values to null
+            return { ...v, missing: v.missing + (v.invalidValues?.length || 0), invalidValues: undefined };
+          } else if (handling === 'zero') {
+            // Convert invalid values to zero
+            return { ...v, invalidValues: undefined };
+          }
+        }
+        return { ...v, missing: 0 };
+      });
       break;
       
     case 'recodeVariables':

@@ -1,9 +1,8 @@
-
 import { DataVariable } from './sampleDataService';
 
 export interface DataQualityIssue {
   id: string;
-  type: 'missing' | 'duplicates' | 'inconsistent' | 'outliers' | 'constant' | 'high_cardinality' | 'format';
+  type: 'missing' | 'duplicates' | 'inconsistent' | 'outliers' | 'constant' | 'high_cardinality' | 'format' | 'mixed_numeric';
   severity: 'low' | 'medium' | 'high';
   title: string;
   description: string;
@@ -12,6 +11,7 @@ export interface DataQualityIssue {
   count?: number;
   percentage?: number;
   examples?: string[];
+  invalidValues?: string[];
 }
 
 export interface DataQualityReport {
@@ -19,6 +19,41 @@ export interface DataQualityReport {
   overallScore: number; // 0-100
   summary: string;
 }
+
+// Helper function to check if a value is numeric
+const isNumeric = (value: any): boolean => {
+  if (value === null || value === undefined || value === '') return false;
+  return !isNaN(Number(value)) && isFinite(Number(value));
+};
+
+// Analyze mixed numeric columns
+const analyzeMixedNumericColumns = (variables: DataVariable[], previewRows: any[]): DataQualityIssue[] => {
+  const issues: DataQualityIssue[] = [];
+  
+  variables.forEach(variable => {
+    if (variable.type === 'numeric' && variable.invalidValues && variable.invalidValues.length > 0) {
+      const totalValues = previewRows.length;
+      const invalidCount = variable.invalidValues.length;
+      const invalidPercentage = (invalidCount / totalValues) * 100;
+      
+      issues.push({
+        id: `mixed-numeric-${variable.name}`,
+        type: 'mixed_numeric',
+        severity: invalidPercentage > 10 ? 'medium' : 'low',
+        title: `Mixed Data Types in '${variable.name}'`,
+        description: `Column appears numeric but contains ${invalidCount} non-numeric values (${invalidPercentage.toFixed(1)}%)`,
+        suggestion: "Replace invalid values with null (recommended) or numeric equivalents during Data Preparation.",
+        affectedColumn: variable.name,
+        count: invalidCount,
+        percentage: invalidPercentage,
+        invalidValues: variable.invalidValues.slice(0, 5), // Show first 5 examples
+        examples: variable.invalidValues.slice(0, 3) // Show first 3 as examples
+      });
+    }
+  });
+  
+  return issues;
+};
 
 // Analyze data quality based on variables and preview data
 export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]): DataQualityReport => {
@@ -32,7 +67,11 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     };
   }
 
-  // 1. Missing Data Analysis
+  // 1. Mixed Numeric Columns Analysis
+  const mixedNumericIssues = analyzeMixedNumericColumns(variables, previewRows);
+  issues.push(...mixedNumericIssues);
+
+  // 2. Missing Data Analysis
   variables.forEach(variable => {
     if (variable.missing > 0) {
       const totalRows = previewRows.length + variable.missing;
@@ -66,7 +105,7 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     }
   });
 
-  // 2. Duplicates Analysis (simplified for demo)
+  // 3. Duplicates Analysis (simplified for demo)
   const duplicateCount = Math.floor(previewRows.length * 0.02); // Simulate 2% duplicates
   if (duplicateCount > 0) {
     issues.push({
@@ -80,7 +119,7 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     });
   }
 
-  // 3. Inconsistent Categorical Values
+  // 4. Inconsistent Categorical Values
   variables.filter(v => v.type === 'categorical').forEach(variable => {
     // Simulate inconsistent values based on variable characteristics
     if (variable.name.toLowerCase().includes('gender') || variable.name.toLowerCase().includes('status')) {
@@ -100,7 +139,7 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     }
   });
 
-  // 4. Outliers in Numeric Data
+  // 5. Outliers in Numeric Data
   variables.filter(v => v.type === 'numeric').forEach(variable => {
     // Simulate outlier detection
     if (variable.name.toLowerCase().includes('income') || variable.name.toLowerCase().includes('salary')) {
@@ -120,7 +159,7 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     }
   });
 
-  // 5. Constant or Near-Constant Columns
+  // 6. Constant or Near-Constant Columns
   variables.forEach(variable => {
     const constantThreshold = 0.95;
     const dominantValueRatio = (previewRows.length - variable.unique + 1) / previewRows.length;
@@ -139,7 +178,7 @@ export const analyzeDataQuality = (variables: DataVariable[], previewRows: any[]
     }
   });
 
-  // 6. High Cardinality in Categorical Columns
+  // 7. High Cardinality in Categorical Columns
   variables.filter(v => v.type === 'categorical').forEach(variable => {
     const cardinalityRatio = variable.unique / previewRows.length;
     

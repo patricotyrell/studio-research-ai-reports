@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, AlertTriangle, XCircle, Info, ArrowRight } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, ArrowRight, Hash } from 'lucide-react';
 import { DataQualityIssue, DataQualityReport } from '@/services/dataQualityService';
 
 interface DataQualityChecksProps {
@@ -28,6 +28,15 @@ const DataQualityChecks: React.FC<DataQualityChecksProps> = ({
         return <Info className="h-4 w-4 text-blue-500 flex-shrink-0" />;
       default:
         return <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />;
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'mixed_numeric':
+        return <Hash className="h-4 w-4 text-purple-500 flex-shrink-0" />;
+      default:
+        return getSeverityIcon('medium');
     }
   };
 
@@ -84,7 +93,7 @@ const DataQualityChecks: React.FC<DataQualityChecksProps> = ({
                 key={issue.id}
                 className="flex items-start gap-3 p-3 border rounded-lg bg-gray-50"
               >
-                {getSeverityIcon(issue.severity)}
+                {issue.type === 'mixed_numeric' ? getTypeIcon(issue.type) : getSeverityIcon(issue.severity)}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-medium text-sm">{issue.title}</h4>
@@ -94,17 +103,46 @@ const DataQualityChecks: React.FC<DataQualityChecksProps> = ({
                     >
                       {issue.severity}
                     </Badge>
+                    {issue.type === 'mixed_numeric' && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-purple-100 text-purple-800 border-purple-200"
+                      >
+                        Mixed Types
+                      </Badge>
+                    )}
                   </div>
                   
                   <p className="text-sm text-gray-600 mb-2">
                     {issue.description}
                   </p>
                   
+                  {issue.type === 'mixed_numeric' && (
+                    <div className="mb-2 p-2 bg-purple-50 rounded border border-purple-200">
+                      <p className="text-xs text-purple-700 font-medium mb-1">
+                        Column appears numeric but contains non-numeric values such as:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {issue.invalidValues?.map((value, idx) => (
+                          <code
+                            key={idx}
+                            className="px-1.5 py-0.5 bg-purple-200 text-purple-800 text-xs rounded"
+                          >
+                            "{value}"
+                          </code>
+                        ))}
+                      </div>
+                      <p className="text-xs text-purple-600 mt-1">
+                        These will be treated as missing unless cleaned in Data Preparation.
+                      </p>
+                    </div>
+                  )}
+                  
                   <p className="text-xs text-gray-500 mb-3">
                     💡 {issue.suggestion}
                   </p>
                   
-                  {issue.examples && issue.examples.length > 0 && (
+                  {issue.examples && issue.examples.length > 0 && issue.type !== 'mixed_numeric' && (
                     <div className="mb-3">
                       <p className="text-xs text-gray-500 mb-1">Examples found:</p>
                       <div className="flex flex-wrap gap-1">

@@ -8,6 +8,8 @@ export interface DataVariable {
   coding?: { [key: string]: number }; // For categorical variables
   originalCategories?: string[]; // Store original category labels
   missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore'; // How to handle missing values
+  invalidValues?: string[]; // For mostly numeric columns with some non-numeric entries
+  numericPercentage?: number; // Percentage of values that are numeric (for mixed columns)
 }
 
 export interface DataRow {
@@ -17,14 +19,14 @@ export interface DataRow {
 // Sample data for Customer Satisfaction Survey
 const customerSatisfactionVariables: DataVariable[] = [
   { name: 'respondent_id', type: 'numeric', missing: 0, unique: 150, example: '1001' },
-  { name: 'age', type: 'numeric', missing: 5, unique: 40, example: '32' },
+  { name: 'age', type: 'numeric', missing: 5, unique: 40, example: '32', invalidValues: ['NA', 'Unknown'], numericPercentage: 95 },
   { name: 'gender', type: 'categorical', missing: 2, unique: 3, example: 'Female' },
   { name: 'location', type: 'categorical', missing: 0, unique: 8, example: 'West Coast' },
   { name: 'purchase_frequency', type: 'categorical', missing: 3, unique: 5, example: 'Monthly' },
   { name: 'product_category', type: 'categorical', missing: 0, unique: 6, example: 'Electronics' },
   { name: 'satisfaction_overall', type: 'numeric', missing: 0, unique: 10, example: '8' },
   { name: 'satisfaction_quality', type: 'numeric', missing: 2, unique: 10, example: '7' },
-  { name: 'satisfaction_price', type: 'numeric', missing: 1, unique: 10, example: '6' },
+  { name: 'satisfaction_price', type: 'numeric', missing: 1, unique: 10, example: '6', invalidValues: ['N/A'], numericPercentage: 98 },
   { name: 'satisfaction_service', type: 'numeric', missing: 3, unique: 10, example: '8' },
   { name: 'likely_to_recommend', type: 'numeric', missing: 4, unique: 11, example: '9' },
   { name: 'feedback', type: 'text', missing: 45, unique: 95, example: 'Great customer service, but prices are high' }
@@ -84,7 +86,12 @@ const generatePreviewRows = (variables: DataVariable[], count = 5): DataRow[] =>
         // Simulate missing value
         row[variable.name] = null;
       } else if (variable.type === 'numeric') {
-        row[variable.name] = Math.floor(Math.random() * 10) + 1;
+        // For numeric columns with invalid values, occasionally add them
+        if (variable.invalidValues && Math.random() > 0.9) {
+          row[variable.name] = variable.invalidValues[Math.floor(Math.random() * variable.invalidValues.length)];
+        } else {
+          row[variable.name] = Math.floor(Math.random() * 10) + 1;
+        }
       } else if (variable.type === 'categorical') {
         const options = ['Option A', 'Option B', 'Option C'];
         row[variable.name] = options[Math.floor(Math.random() * options.length)];
