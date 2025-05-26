@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StepIndicator from '@/components/StepIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 import ExplorationModeSelector from '@/components/visualization/ExplorationModeSelector';
 import VariableSelector from '@/components/visualization/VariableSelector';
 import ChartTypeSelector from '@/components/visualization/ChartTypeSelector';
@@ -12,78 +14,54 @@ import ChartValidationAlert from '@/components/visualization/ChartValidationAler
 import InsightsPanel from '@/components/visualization/InsightsPanel';
 import { getDatasetForAnalysis, getCurrentDatasetState } from '@/utils/dataUtils';
 import { getDatasetInfo, getAllDatasetRows, getDatasetVariables } from '@/utils/datasetCache';
+import { useNavigate } from 'react-router-dom';
 
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
 
 const Visualization = () => {
+  const navigate = useNavigate();
   const [explorationMode, setExplorationMode] = useState<'guided' | 'custom'>('guided');
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [isValidConfiguration, setIsValidConfiguration] = useState(false);
   const [dataset, setDataset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    // ENHANCED: Enhanced debugging to trace data flow
-    console.log('🎨 VISUALIZATION MODULE - Starting data load process');
+    console.log('🎨 VISUALIZATION MODULE - Starting enhanced data load process');
     
-    // First, check what's in the cache directly
-    const directRows = getAllDatasetRows();
-    const directVariables = getDatasetVariables();
-    const datasetInfo = getDatasetInfo();
-    
-    console.log('🔍 DIRECT CACHE CHECK:', {
-      directRows: directRows.length,
-      directVariables: directVariables.length,
-      datasetInfo
-    });
-    
-    // Then check current state
-    const currentState = getCurrentDatasetState();
-    console.log('📊 CURRENT STATE CHECK:', {
-      variables: currentState.variables.length,
-      rows: currentState.rows.length,
-      isRealData: currentState.isRealData,
-      sessionId: currentState.sessionId
-    });
-    
-    // Finally check analysis dataset
-    const analysisDataset = getDatasetForAnalysis();
-    console.log('🎯 ANALYSIS DATASET CHECK:', {
-      variables: analysisDataset.variables.length,
-      rows: analysisDataset.rows.length,
-      isRealData: analysisDataset.isRealData,
-      sessionId: analysisDataset.sessionId,
-      sampleRows: analysisDataset.rows.slice(0, 3)
-    });
-    
-    // Validation check
-    const hasValidData = analysisDataset.variables && 
-                        analysisDataset.variables.length > 0 && 
-                        analysisDataset.rows && 
-                        analysisDataset.rows.length > 0;
-    
-    if (!hasValidData) {
-      console.error('🚨 CRITICAL: No valid dataset found for visualization!', {
-        hasVariables: !!(analysisDataset.variables && analysisDataset.variables.length > 0),
-        hasRows: !!(analysisDataset.rows && analysisDataset.rows.length > 0),
+    // Enhanced data loading with multiple fallbacks
+    try {
+      // Step 1: Try to get analysis dataset
+      const analysisDataset = getDatasetForAnalysis();
+      console.log('🎯 Analysis dataset retrieved:', {
+        variables: analysisDataset.variables?.length || 0,
+        rows: analysisDataset.rows?.length || 0,
         isRealData: analysisDataset.isRealData,
-        debugInfo: {
-          directCacheRows: directRows.length,
-          directCacheVariables: directVariables.length,
-          currentStateRows: currentState.rows.length,
-          analysisDatasetRows: analysisDataset.rows.length
-        }
+        sessionId: analysisDataset.sessionId
       });
-    } else {
-      console.log('✅ Dataset validation passed:', {
-        rowsAvailable: analysisDataset.rows.length,
-        variablesAvailable: analysisDataset.variables.length,
-        isRealData: analysisDataset.isRealData
-      });
+
+      // Step 2: Validate the dataset
+      const hasValidData = analysisDataset.variables && 
+                          analysisDataset.variables.length > 0 && 
+                          analysisDataset.rows && 
+                          analysisDataset.rows.length > 0;
+
+      if (hasValidData) {
+        console.log('✅ Valid dataset found for visualization');
+        setDataset(analysisDataset);
+        setDataLoadError(null);
+      } else {
+        console.error('🚨 Invalid dataset structure');
+        setDataLoadError('Dataset structure is invalid or empty');
+      }
+
+    } catch (error) {
+      console.error('🚨 Error loading dataset for visualization:', error);
+      setDataLoadError(`Failed to load dataset: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
     
-    setDataset(analysisDataset);
     setLoading(false);
   }, []);
 
@@ -101,21 +79,67 @@ const Visualization = () => {
     setIsValidConfiguration(isValid);
   };
 
+  const handleReturnToUpload = () => {
+    navigate('/upload');
+  };
+
+  const handleReturnToOverview = () => {
+    navigate('/data-overview');
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="p-6">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-research-700"></div>
+            <span className="ml-4">Loading visualization module...</span>
           </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  // ENHANCED: More detailed validation check
-  const hasValidData = dataset && 
-                      dataset.variables && 
+  // Enhanced error handling
+  if (dataLoadError || !dataset) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <Alert className="max-w-2xl mx-auto border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription>
+              <div className="space-y-3">
+                <p className="font-medium text-red-800">Unable to load data for visualization</p>
+                <p className="text-red-700">
+                  {dataLoadError || 'No dataset found. Please ensure you have uploaded and prepared your data.'}
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <Button onClick={handleReturnToUpload} size="sm" variant="outline">
+                    Return to Upload
+                  </Button>
+                  <Button onClick={handleReturnToOverview} size="sm" variant="outline">
+                    Return to Overview
+                  </Button>
+                </div>
+                <details className="mt-2">
+                  <summary className="text-xs text-red-600 cursor-pointer">Debug Information</summary>
+                  <div className="mt-1 text-xs text-red-500 font-mono space-y-1">
+                    <div>Variables: {dataset?.variables?.length || 0}</div>
+                    <div>Rows: {dataset?.rows?.length || 0}</div>
+                    <div>Real data: {dataset?.isRealData ? 'Yes' : 'No'}</div>
+                    <div>Session ID: {dataset?.sessionId || 'None'}</div>
+                    <div>Error: {dataLoadError || 'No specific error'}</div>
+                  </div>
+                </details>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const hasValidData = dataset.variables && 
                       dataset.variables.length > 0 && 
                       dataset.rows && 
                       dataset.rows.length > 0;
@@ -127,14 +151,10 @@ const Visualization = () => {
           <Alert className="max-w-2xl mx-auto">
             <Info className="h-4 w-4" />
             <AlertDescription>
-              No dataset found. Please upload and prepare your data first before proceeding to visualization.
+              Dataset validation failed. Please check your data and try again.
               <div className="mt-2 text-xs text-gray-500 font-mono">
-                <div>Debug info:</div>
-                <div>Variables: {dataset?.variables?.length || 0}</div>
-                <div>Rows: {dataset?.rows?.length || 0}</div>
-                <div>Real data: {dataset?.isRealData ? 'Yes' : 'No'}</div>
-                <div>Session ID: {dataset?.sessionId || 'None'}</div>
-                <div>Has metadata: {dataset?.metadata ? 'Yes' : 'No'}</div>
+                <div>Variables available: {dataset?.variables?.length || 0}</div>
+                <div>Rows available: {dataset?.rows?.length || 0}</div>
               </div>
             </AlertDescription>
           </Alert>
@@ -157,12 +177,12 @@ const Visualization = () => {
             <p className="text-gray-600">
               Create insightful visualizations to explore patterns and relationships in your data.
             </p>
-            {/* Enhanced debug info for visualization */}
             <div className="text-xs text-gray-400 mt-2 font-mono">
-              📊 Loaded: {dataset.rows.length} rows, {dataset.variables.length} variables
-              | Session: {dataset.sessionId?.slice(-8) || 'N/A'}
+              📊 Dataset: {dataset.rows.length} rows, {dataset.variables.length} variables
+              {dataset.sessionId && ` | Session: ${dataset.sessionId.slice(-8)}`}
               | {dataset.isRealData ? "Real Data" : "Sample Data"}
-              | Prep: {Object.keys(dataset.prepChanges || {}).length} steps applied
+              {dataset.prepChanges && Object.keys(dataset.prepChanges).length > 0 && 
+                ` | Prep steps: ${Object.keys(dataset.prepChanges).length}`}
             </div>
           </div>
 

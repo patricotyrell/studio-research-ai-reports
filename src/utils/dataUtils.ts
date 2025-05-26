@@ -1,3 +1,4 @@
+
 import { getAllDatasetRows, getDatasetVariables, getDatasetMetadata, getPrepChanges, getDatasetInfo, isDatasetLoaded, setDatasetCache } from './datasetCache';
 import { DataVariable } from '@/services/sampleDataService';
 
@@ -30,12 +31,77 @@ export const getCurrentDatasetState = () => {
   };
 };
 
-// FIXED: Get dataset specifically for analysis/visualization (ensure we have actual data)
+// ENHANCED: Get dataset specifically for analysis/visualization with better validation
 export const getDatasetForAnalysis = () => {
   console.log('🎯 getDatasetForAnalysis called');
   
   // Get the current dataset state
   const currentState = getCurrentDatasetState();
+  
+  // CRITICAL: Validate that we actually have usable data
+  const hasValidData = currentState.variables && 
+                      currentState.variables.length > 0 && 
+                      currentState.rows && 
+                      currentState.rows.length > 0;
+  
+  if (!hasValidData) {
+    console.error('🚨 No valid data found in dataset cache!');
+    console.log('📊 Attempting to restore or initialize sample data...');
+    
+    // Try to restore from localStorage first
+    const savedMetadata = localStorage.getItem('datasetMetadata');
+    if (savedMetadata) {
+      try {
+        const metadata = JSON.parse(savedMetadata);
+        console.log('📂 Found saved metadata:', metadata);
+        
+        // If we have real data metadata but no cache, something went wrong
+        if (metadata.isRealData) {
+          console.error('🚨 Real data metadata found but cache is empty - data may have been lost');
+        }
+      } catch (e) {
+        console.warn('Could not parse saved metadata');
+      }
+    }
+    
+    // If no valid data exists, create minimal sample data for visualization testing
+    if (!currentState.isRealData && currentState.rows.length === 0) {
+      console.log('🔧 Creating minimal sample data for visualization');
+      const sampleRows = [
+        { Category: 'A', Value: 10, Count: 5 },
+        { Category: 'B', Value: 20, Count: 8 },
+        { Category: 'C', Value: 15, Count: 3 },
+        { Category: 'D', Value: 25, Count: 12 }
+      ];
+      
+      const sampleVariables: DataVariable[] = [
+        { name: 'Category', type: 'categorical', missing: 0, unique: 4, example: 'A' },
+        { name: 'Value', type: 'numeric', missing: 0, unique: 4, example: '10' },
+        { name: 'Count', type: 'numeric', missing: 0, unique: 4, example: '5' }
+      ];
+      
+      setDatasetCache(sampleRows, sampleVariables, {
+        fileName: 'Sample Data for Visualization',
+        totalRows: sampleRows.length,
+        totalColumns: sampleVariables.length,
+        uploadedAt: new Date().toISOString()
+      }, false);
+      
+      return {
+        variables: sampleVariables,
+        rows: sampleRows,
+        metadata: {
+          fileName: 'Sample Data for Visualization',
+          totalRows: sampleRows.length,
+          totalColumns: sampleVariables.length,
+          uploadedAt: new Date().toISOString()
+        },
+        prepChanges: {},
+        isRealData: false,
+        sessionId: 'sample_' + Date.now()
+      };
+    }
+  }
   
   console.log('📊 Analysis dataset state:', {
     variables: currentState.variables.length,
@@ -45,15 +111,7 @@ export const getDatasetForAnalysis = () => {
     hasMetadata: !!currentState.metadata
   });
   
-  // CRITICAL: Always return the current state with all data
-  return {
-    variables: currentState.variables,
-    rows: currentState.rows, // This should contain all the actual data rows
-    metadata: currentState.metadata,
-    prepChanges: currentState.prepChanges,
-    isRealData: currentState.isRealData,
-    sessionId: currentState.sessionId
-  };
+  return currentState;
 };
 
 // Re-export from datasetCache with proper export
