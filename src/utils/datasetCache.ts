@@ -16,6 +16,7 @@ interface DatasetCache {
   prepChanges: {
     [stepName: string]: any;
   };
+  isRealData: boolean; // Flag to distinguish real vs sample data
 }
 
 // Single source of truth for dataset
@@ -25,15 +26,17 @@ let datasetCache: DatasetCache = {
   metadata: null,
   originalRows: [],
   originalVariables: [],
-  prepChanges: {}
+  prepChanges: {},
+  isRealData: false
 };
 
 // Store the complete dataset in memory
-export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata: any) => {
+export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata: any, isRealData: boolean = true) => {
   console.log('Setting dataset cache:', {
     rows: rows.length,
     variables: variables.length,
-    metadata
+    metadata,
+    isRealData
   });
   
   datasetCache = {
@@ -42,25 +45,37 @@ export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata
     metadata,
     originalRows: [...rows], // Store original data
     originalVariables: [...variables],
-    prepChanges: {} // Reset prep changes when setting new data
+    prepChanges: {}, // Reset prep changes when setting new data
+    isRealData
   };
   
   // Also store basic info in localStorage for persistence
   try {
-    localStorage.setItem('datasetMetadata', JSON.stringify(metadata));
+    localStorage.setItem('datasetMetadata', JSON.stringify({
+      ...metadata,
+      isRealData,
+      totalRows: rows.length
+    }));
   } catch (e) {
     console.warn('Could not save metadata to localStorage:', e);
   }
 };
 
-// Update dataset with modified data (for data prep steps)
+// Update dataset with modified data (for data prep steps) - ONLY when explicitly called
 export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepName?: string, changes?: any) => {
   console.log('Updating dataset cache with modified data:', {
     rows: rows.length,
     variables: variables.length,
     stepName,
-    changes
+    changes,
+    wasRealData: datasetCache.isRealData
   });
+  
+  // CRITICAL: Only update if we have real data, don't let sample data override
+  if (!datasetCache.isRealData && rows.length < 1000) {
+    console.warn('Preventing sample data from overriding real dataset');
+    return;
+  }
   
   // Update the current state but preserve original data
   datasetCache.allRows = [...rows];
@@ -86,7 +101,8 @@ export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepN
     localStorage.setItem('currentDatasetState', JSON.stringify({
       variables: datasetCache.variables,
       prepChanges: datasetCache.prepChanges,
-      metadata: datasetCache.metadata
+      metadata: datasetCache.metadata,
+      totalRows: rows.length
     }));
   } catch (e) {
     console.warn('Could not persist dataset state:', e);
@@ -125,7 +141,8 @@ export const getDatasetRows = (page: number = 0, rowsPerPage: number = 10): any[
   console.log(`Getting rows ${startIndex} to ${endIndex} from cache:`, {
     totalRows: datasetCache.allRows.length,
     requestedPage: page,
-    rowsPerPage
+    rowsPerPage,
+    isRealData: datasetCache.isRealData
   });
   
   return datasetCache.allRows.slice(startIndex, endIndex);
@@ -136,8 +153,12 @@ export const getDatasetPreviewRows = (): any[] => {
   return datasetCache.allRows.slice(0, 5);
 };
 
-// Get all rows (for processing)
+// Get all rows (for processing) - CRITICAL: Return complete dataset
 export const getAllDatasetRows = (): any[] => {
+  console.log('Getting all dataset rows:', {
+    count: datasetCache.allRows.length,
+    isRealData: datasetCache.isRealData
+  });
   return [...datasetCache.allRows]; // Return copy to prevent mutation
 };
 
@@ -173,7 +194,8 @@ export const clearDatasetCache = () => {
     metadata: null,
     originalRows: [],
     originalVariables: [],
-    prepChanges: {}
+    prepChanges: {},
+    isRealData: false
   };
   localStorage.removeItem('datasetMetadata');
   localStorage.removeItem('currentDatasetState');
@@ -193,7 +215,8 @@ export const restoreDatasetState = () => {
         }
         console.log('Restored dataset state from localStorage:', {
           variables: variables.length,
-          prepChanges: Object.keys(prepChanges || {})
+          prepChanges: Object.keys(prepChanges || {}),
+          totalRows: metadata?.totalRows
         });
         return true;
       }
@@ -204,8 +227,14 @@ export const restoreDatasetState = () => {
   return false;
 };
 
-// Initialize cache from sample data (for demo mode)
+// FIXED: Initialize sample data cache - only if no real data exists
 export const initializeSampleDataCache = (sampleData: any) => {
+  // CRITICAL: Don't override real data with sample data
+  if (datasetCache.isRealData && datasetCache.allRows.length > 0) {
+    console.log('Skipping sample data initialization - real data already loaded');
+    return;
+  }
+  
   if (sampleData?.variables && sampleData?.previewRows) {
     // Generate extended rows for sample data
     const extendedRows = [];
@@ -233,6 +262,17 @@ export const initializeSampleDataCache = (sampleData: any) => {
       totalRows: extendedRows.length,
       totalColumns: sampleData.variables.length,
       uploadedAt: new Date().toISOString()
-    });
+    }, false); // Mark as sample data
   }
+};
+
+// Get current dataset info for debugging
+export const getDatasetInfo = () => {
+  return {
+    totalRows: datasetCache.allRows.length,
+    totalVariables: datasetCache.variables.length,
+    isRealData: datasetCache.isRealData,
+    hasOriginal: datasetCache.originalRows.length > 0,
+    prepSteps: Object.keys(datasetCache.prepChanges)
+  };
 };

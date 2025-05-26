@@ -14,7 +14,8 @@ import RecodeVariablesStep from '@/components/data-prep/RecodeVariablesStep';
 import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
 import RemoveColumnsStep from '@/components/data-prep/RemoveColumnsStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
-import { saveStepCompletion, getCompletedSteps, applyDataPrepChanges, getCurrentDatasetState } from '@/utils/dataUtils';
+import { saveStepCompletion, getCompletedSteps, getCurrentDatasetState } from '@/utils/dataUtils';
+import { getDatasetInfo } from '@/utils/datasetCache';
 
 const TOTAL_STEPS = 6;
 
@@ -39,6 +40,10 @@ const DataPreparation = () => {
       return;
     }
     
+    // Debug: Check current dataset state
+    const datasetInfo = getDatasetInfo();
+    console.log('Data Preparation - Current dataset info:', datasetInfo);
+    
     // Load current dataset state to restore any existing changes
     const currentState = getCurrentDatasetState();
     if (currentState.prepChanges) {
@@ -46,6 +51,7 @@ const DataPreparation = () => {
     }
   }, [navigate]);
 
+  // FIXED: Only apply changes when step is explicitly completed, not during navigation
   const handleStepComplete = (step: string, autoApplied: boolean, changes?: any) => {
     console.log(`Step ${step} completed with changes:`, changes);
     
@@ -54,24 +60,27 @@ const DataPreparation = () => {
       const newStepChanges = { ...stepChanges, [step]: changes };
       setStepChanges(newStepChanges);
       
-      // Apply changes to dataset and propagate forward
-      applyDataPrepChanges(step, changes);
-      
-      // Clear any subsequent step changes since data has changed
-      const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
-      const currentStepIndex = stepOrder.indexOf(step);
-      if (currentStepIndex >= 0) {
-        const updatedStepChanges = { ...newStepChanges };
-        stepOrder.slice(currentStepIndex + 1).forEach(laterStep => {
-          delete updatedStepChanges[laterStep];
-          // Also reset completion status for later steps
-          const newCompletedSteps = { ...completedSteps };
-          newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
-          setCompletedSteps(newCompletedSteps);
-          saveStepCompletion(laterStep, false);
-        });
-        setStepChanges(updatedStepChanges);
-      }
+      // CRITICAL: Only apply changes to dataset when step is actually completed
+      // Import applyDataPrepChanges only when needed to avoid circular dependencies
+      import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
+        applyDataPrepChanges(step, changes);
+        
+        // Clear any subsequent step changes since data has changed
+        const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
+        const currentStepIndex = stepOrder.indexOf(step);
+        if (currentStepIndex >= 0) {
+          const updatedStepChanges = { ...newStepChanges };
+          stepOrder.slice(currentStepIndex + 1).forEach(laterStep => {
+            delete updatedStepChanges[laterStep];
+            // Also reset completion status for later steps
+            const newCompletedSteps = { ...completedSteps };
+            newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
+            setCompletedSteps(newCompletedSteps);
+            saveStepCompletion(laterStep, false);
+          });
+          setStepChanges(updatedStepChanges);
+        }
+      });
     }
     
     // Mark step as completed
@@ -83,6 +92,7 @@ const DataPreparation = () => {
     saveStepCompletion(step, true);
   };
   
+  // FIXED: Navigation should not trigger data changes
   const handleNext = () => {
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep(prev => prev + 1);
@@ -102,7 +112,9 @@ const DataPreparation = () => {
     setCurrentStep(7);
   };
 
+  // FIXED: Step navigation should not modify data
   const handleNavigateToStep = (step: number) => {
+    console.log(`Navigating to step ${step} without applying changes`);
     setCurrentStep(step);
   };
   
@@ -111,7 +123,9 @@ const DataPreparation = () => {
     
     // Ensure all changes are properly saved before navigating
     const finalState = getCurrentDatasetState();
+    const datasetInfo = getDatasetInfo();
     console.log('Final dataset state before navigation:', finalState);
+    console.log('Final dataset info:', datasetInfo);
     
     setTimeout(() => {
       setLoading(false);
@@ -193,6 +207,9 @@ const DataPreparation = () => {
     }
   };
   
+  // Get current dataset info for debugging
+  const datasetInfo = getDatasetInfo();
+  
   return (
     <DashboardLayout>
       <div className="p-6">
@@ -207,6 +224,11 @@ const DataPreparation = () => {
             <p className="text-gray-600">
               Prepare your data for analysis by following our AI-guided workflow or making manual adjustments.
             </p>
+            {/* Debug info - can be removed in production */}
+            <div className="text-xs text-gray-400 mt-2">
+              Dataset: {datasetInfo.totalRows} rows, {datasetInfo.totalVariables} variables 
+              {datasetInfo.isRealData ? " (Real Data)" : " (Sample Data)"}
+            </div>
           </div>
           
           {currentStep < 7 && (
