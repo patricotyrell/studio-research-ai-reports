@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -13,6 +14,7 @@ import { CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getCurrentProject } from '@/utils/dataUtils';
 import { getDatasetPreviewRows } from '@/utils/dataUtils';
 import { analyzeDataQuality, DataQualityReport } from '@/services/dataQualityService';
+import { getDatasetRowCount, getDatasetMetadata } from '@/utils/datasetCache';
 
 interface Column {
   name: string;
@@ -28,55 +30,85 @@ const DataOverview = () => {
   const [projectInfo, setProjectInfo] = useState<any | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
   const [qualityReport, setQualityReport] = useState<DataQualityReport | null>(null);
+  const [loading, setLoading] = useState(true);
   
   // Check if user is logged in and has a current file
   useEffect(() => {
+    console.log('🔍 DataOverview - Loading data...');
+    
     const user = localStorage.getItem('user');
     if (!user) {
       navigate('/auth');
       return;
     }
     
+    // Get data from dataset cache
+    const variables = getDatasetVariables();
+    const previewRows = getDatasetPreviewRows();
+    const totalRows = getDatasetRowCount();
+    const metadata = getDatasetMetadata();
+    
+    console.log('📊 DataOverview - Dataset info:', {
+      variables: variables.length,
+      previewRows: previewRows.length,
+      totalRows,
+      metadata
+    });
+    
+    // Get file and project info
     const currentFile = getCurrentFile();
     const currentProject = getCurrentProject();
     
-    if (!currentFile) {
-      navigate('/upload');
-      return;
-    }
+    // Update file info with actual data counts
+    const updatedFileInfo = currentFile ? {
+      ...currentFile,
+      rows: totalRows,
+      columns: variables.length
+    } : {
+      name: metadata?.fileName || 'Unknown Dataset',
+      rows: totalRows,
+      columns: variables.length
+    };
     
-    setFileInfo(currentFile);
+    setFileInfo(updatedFileInfo);
     setProjectInfo(currentProject);
     
-    // Get variables from sample data or user uploaded file
-    const variables = getDatasetVariables();
-    const previewRows = getDatasetPreviewRows();
-    
     if (variables.length > 0) {
-      setColumns(variables);
+      // Convert variables to column format with sample data analysis
+      const columnsData: Column[] = variables.map(variable => {
+        const values = previewRows.map(row => row[variable.name]).filter(val => val !== null && val !== undefined);
+        const uniqueValues = new Set(values).size;
+        const missingCount = previewRows.length - values.length;
+        const exampleValue = values.length > 0 ? String(values[0]) : '';
+        
+        // Detect type based on data
+        let detectedType: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
+        if (variable.type === 'numeric' || values.some(val => !isNaN(parseFloat(String(val))))) {
+          detectedType = 'numeric';
+        } else if (uniqueValues < values.length * 0.5 && uniqueValues < 20) {
+          detectedType = 'categorical';
+        }
+        
+        return {
+          name: variable.name,
+          type: detectedType,
+          missing: missingCount,
+          unique: uniqueValues,
+          example: exampleValue
+        };
+      });
+      
+      setColumns(columnsData);
       
       // Perform data quality analysis
-      const report = analyzeDataQuality(variables, previewRows);
-      setQualityReport(report);
-    } else {
-      generateSyntheticColumns();
+      if (previewRows.length > 0) {
+        const report = analyzeDataQuality(variables, previewRows);
+        setQualityReport(report);
+      }
     }
-  }, [navigate]);
-  
-  const generateSyntheticColumns = () => {
-    const sampleColumns: Column[] = [
-      { name: 'ID', type: 'numeric', missing: 0, unique: 100, example: '1' },
-      { name: 'Gender', type: 'categorical', missing: 0, unique: 2, example: 'Male' },
-      { name: 'Age', type: 'numeric', missing: 0, unique: 48, example: '35' },
-      { name: 'Smoking_Status', type: 'categorical', missing: 0, unique: 2, example: 'Non-Smoker' },
-      { name: 'Exercise_Level', type: 'categorical', missing: 0, unique: 3, example: 'Low' },
-      { name: 'BMI', type: 'numeric', missing: 0, unique: 74, example: '35.6' },
-      { name: 'Has_Hypertension', type: 'categorical', missing: 0, unique: 2, example: 'No' },
-      { name: 'Health_Score', type: 'numeric', missing: 0, unique: 57, example: '98' }
-    ];
     
-    setColumns(sampleColumns);
-  };
+    setLoading(false);
+  }, [navigate]);
   
   const handleContinue = () => {
     navigate('/data-preparation');
@@ -87,21 +119,36 @@ const DataOverview = () => {
     navigate('/data-preparation', { state: { focusIssue: issueId } });
   };
   
-  if (!fileInfo) {
+  if (loading) {
     return (
       <DashboardLayout>
         <div className="p-6 text-center">
-          Loading data...
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700 mx-auto mb-4"></div>
+          Loading data overview...
         </div>
       </DashboardLayout>
     );
   }
   
-  // Calculate data quality metrics
-  const totalMissingValues = columns.reduce((acc, col) => acc + col.missing, 0);
-  const hasNoDuplicates = true; // Placeholder for duplicate detection logic
-  const hasConsistentValues = columns.filter(col => col.type === 'categorical').length > 0;
-    
+  if (!fileInfo || columns.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 text-center">
+          <div className="max-w-md mx-auto bg-amber-50 border border-amber-200 rounded-lg p-6">
+            <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-amber-800 mb-2">No Data Found</h3>
+            <p className="text-amber-700 mb-4">
+              Please upload a file first to view the data overview.
+            </p>
+            <Button onClick={() => navigate('/upload')} className="bg-research-700 hover:bg-research-800">
+              Upload Data
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+  
   return (
     <DashboardLayout>
       <div className="p-6">
@@ -140,11 +187,11 @@ const DataOverview = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Rows</p>
-                  <p className="font-medium text-sm">{fileInfo.rows}</p>
+                  <p className="font-medium text-sm">{fileInfo.rows?.toLocaleString() || 0}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Columns</p>
-                  <p className="font-medium text-sm">{fileInfo.columns}</p>
+                  <p className="font-medium text-sm">{fileInfo.columns || 0}</p>
                 </div>
               </div>
             </CardContent>
