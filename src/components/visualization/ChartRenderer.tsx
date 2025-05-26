@@ -65,11 +65,15 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
       const binCount = 10;
       const binSize = (max - min) / binCount;
       
-      const bins = Array(binCount).fill(0).map((_, i) => ({
-        bin: `${(min + i * binSize).toFixed(1)}-${(min + (i + 1) * binSize).toFixed(1)}`,
-        frequency: 0,
-        range: [min + i * binSize, min + (i + 1) * binSize]
-      }));
+      const bins = Array(binCount).fill(0).map((_, i) => {
+        const binStart = min + (i * binSize);
+        const binEnd = min + ((i + 1) * binSize);
+        return {
+          bin: `${binStart.toFixed(1)}-${binEnd.toFixed(1)}`,
+          frequency: 0,
+          range: [binStart, binEnd]
+        };
+      });
       
       values.forEach(value => {
         const binIndex = Math.min(Math.floor((value - min) / binSize), binCount - 1);
