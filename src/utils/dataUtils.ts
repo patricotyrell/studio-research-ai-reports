@@ -1,4 +1,5 @@
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
+import { parseExcelFile, ExcelParseResult } from './excelUtils';
 
 // Helper function to check if in demo mode
 export const isDemoMode = () => {
@@ -146,6 +147,29 @@ export const getCompletedSteps = () => {
   }
   
   return JSON.parse(stepsData);
+};
+
+// Enhanced process file data to handle both CSV and Excel files
+export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  const fileName = file.name.toLowerCase();
+  const isCSV = fileName.endsWith('.csv');
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+  
+  if (!isCSV && !isExcel) {
+    throw new Error('Unsupported file format. Please upload a CSV or Excel file.');
+  }
+  
+  if (isExcel) {
+    const result = await parseExcelFile(file, selectedSheet);
+    return {
+      variables: result.variables,
+      previewRows: result.previewRows,
+      totalRows: result.totalRows
+    };
+  }
+  
+  // Handle CSV files (existing logic)
+  return processCSVData(file);
 };
 
 // Process CSV data to extract variables and preview rows

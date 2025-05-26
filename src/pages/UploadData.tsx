@@ -3,17 +3,27 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
+import SheetSelectionDialog from '@/components/SheetSelectionDialog';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileText, AlertCircle } from 'lucide-react';
-import { processCSVData, createProject } from '@/utils/dataUtils';
+import { processFileData, createProject } from '@/utils/dataUtils';
+import { getExcelSheetInfo } from '@/utils/excelUtils';
+
+interface SheetInfo {
+  name: string;
+  rowCount: number;
+  columnCount: number;
+}
 
 const UploadData = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [showSheetDialog, setShowSheetDialog] = useState(false);
+  const [availableSheets, setAvailableSheets] = useState<SheetInfo[]>([]);
   const [processedData, setProcessedData] = useState<any>(null);
   const navigate = useNavigate();
 
@@ -48,18 +58,63 @@ const UploadData = () => {
   };
 
   const handleFileSelection = async (selectedFile: File) => {
-    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
+    const fileName = selectedFile.name.toLowerCase();
+    const isCSV = fileName.endsWith('.csv');
+    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    
+    if (!isCSV && !isExcel) {
       toast.error('Invalid file format', {
-        description: 'Please upload a CSV file.',
+        description: 'Please upload a CSV or Excel file (.csv, .xlsx, .xls).',
       });
       return;
     }
     
     setFile(selectedFile);
+    
+    // If it's an Excel file, check for multiple sheets
+    if (isExcel) {
+      try {
+        const sheets = await getExcelSheetInfo(selectedFile);
+        
+        if (sheets.length > 1) {
+          setAvailableSheets(sheets);
+          setShowSheetDialog(true);
+          return;
+        }
+        
+        // Single sheet or default to first sheet
+        await processFile(selectedFile);
+      } catch (error) {
+        console.error('Error reading Excel file:', error);
+        toast.error('Error reading Excel file', {
+          description: error instanceof Error ? error.message : 'Failed to read the Excel file structure',
+        });
+        setFile(null);
+      }
+    } else {
+      // Process CSV file directly
+      await processFile(selectedFile);
+    }
+  };
+
+  const handleSheetSelection = async (sheetName: string) => {
+    setShowSheetDialog(false);
+    if (file) {
+      await processFile(file, sheetName);
+    }
+  };
+
+  const handleSheetCancel = () => {
+    setShowSheetDialog(false);
+    setFile(null);
+    setAvailableSheets([]);
+  };
+
+  const processFile = async (selectedFile: File, selectedSheet?: string) => {
     setIsProcessing(true);
     
     try {
-      const processed = await processCSVData(selectedFile);
+      const processed = await processFileData(selectedFile, selectedSheet);
       setProcessedData(processed);
       
       // Store file info
@@ -69,7 +124,8 @@ const UploadData = () => {
         type: selectedFile.type,
         dateUploaded: new Date().toISOString(),
         rows: processed.totalRows,
-        columns: processed.variables.length
+        columns: processed.variables.length,
+        selectedSheet: selectedSheet || undefined
       };
       
       localStorage.setItem('currentFile', JSON.stringify(fileInfo));
@@ -83,6 +139,7 @@ const UploadData = () => {
       toast.error('Error processing file', {
         description: error instanceof Error ? error.message : 'Failed to process the uploaded file',
       });
+      setFile(null);
     } finally {
       setIsProcessing(false);
     }
@@ -118,7 +175,7 @@ const UploadData = () => {
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-research-900 mb-2">Upload Your Data</h1>
             <p className="text-gray-600">
-              Upload a CSV file to begin your research analysis. We'll process your data and guide you through the preparation steps.
+              Upload a CSV or Excel file to begin your research analysis. We'll process your data and guide you through the preparation steps.
             </p>
           </div>
           
@@ -167,9 +224,9 @@ const UploadData = () => {
                       <Upload className="h-12 w-12 text-research-700" />
                     </div>
                     
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Upload Your CSV File</h3>
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Upload Your Data File</h3>
                     <p className="text-gray-500 mb-6 text-center max-w-md">
-                      Drag and drop your CSV file here, or click to browse and select a file from your computer.
+                      Drag and drop your CSV or Excel file here, or click to browse and select a file from your computer.
                     </p>
                     
                     <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -183,7 +240,7 @@ const UploadData = () => {
                     
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <AlertCircle className="h-4 w-4" />
-                      <span>CSV files only (max 10MB)</span>
+                      <span>CSV or Excel files (.csv, .xlsx, .xls) • Max 10MB</span>
                     </div>
                   </>
                 )}
@@ -191,7 +248,7 @@ const UploadData = () => {
                 <input
                   id="file-upload"
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx,.xls"
                   className="hidden"
                   onChange={handleFileChange}
                 />
@@ -203,14 +260,22 @@ const UploadData = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h4 className="font-medium text-blue-900 mb-2">File Requirements</h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• CSV format with headers in the first row</li>
+              <li>• CSV or Excel format (.csv, .xlsx, .xls) with headers in the first row</li>
               <li>• Maximum file size: 10MB</li>
-              <li>• UTF-8 encoding recommended</li>
+              <li>• UTF-8 encoding recommended for CSV files</li>
               <li>• Each column should represent a variable/question</li>
+              <li>• For Excel files with multiple sheets, you'll be prompted to select one</li>
             </ul>
           </div>
         </div>
       </div>
+      
+      <SheetSelectionDialog
+        open={showSheetDialog}
+        sheets={availableSheets}
+        onSelectSheet={handleSheetSelection}
+        onCancel={handleSheetCancel}
+      />
       
       <ProjectNameDialog
         open={showProjectDialog}

@@ -41,10 +41,14 @@ const DataUpload = () => {
   };
 
   const processFile = (file: File) => {
-    if (!file.name.endsWith('.csv')) {
+    const fileName = file.name.toLowerCase();
+    const isCSV = fileName.endsWith('.csv');
+    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    
+    if (!isCSV && !isExcel) {
       toast({
         title: "Invalid file format",
-        description: "Please upload a CSV file.",
+        description: "Please upload a CSV or Excel file (.csv, .xlsx, .xls).",
         variant: "destructive",
       });
       return;
@@ -56,7 +60,7 @@ const DataUpload = () => {
       description: `${file.name} has been uploaded and is ready for analysis.`,
     });
     
-    // In a real application, we would process the CSV file here
+    // In a real application, we would process the file here
     console.log('File uploaded:', file);
   };
 
@@ -68,7 +72,7 @@ const DataUpload = () => {
             Upload Your Research Data
           </h2>
           <p className="text-gray-600">
-            Upload your survey data as a CSV file to begin analysis. We support data from all major survey platforms.
+            Upload your survey data as a CSV or Excel file to begin analysis. We support data from all major survey platforms.
           </p>
         </div>
         
@@ -87,7 +91,7 @@ const DataUpload = () => {
               <p className="mb-2 text-sm text-gray-700">
                 <span className="font-medium">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-gray-500">CSV files only (max 10MB)</p>
+              <p className="text-xs text-gray-500">CSV or Excel files (.csv, .xlsx, .xls) • Max 10MB</p>
               
               {fileName && (
                 <div className="mt-4 p-2 bg-research-100 rounded text-sm text-research-700 flex items-center gap-2">
@@ -99,7 +103,7 @@ const DataUpload = () => {
               <input
                 id="file-upload"
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
                 onChange={handleFileChange}
               />
