@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -114,10 +113,12 @@ const UploadData = () => {
     setIsProcessing(true);
     
     try {
+      console.log('Processing file:', selectedFile.name, 'Size:', selectedFile.size);
       const processed = await processFileData(selectedFile, selectedSheet);
+      console.log('File processed successfully:', processed);
       setProcessedData(processed);
       
-      // Store file info
+      // Store minimal file info (don't store all data in localStorage)
       const fileInfo = {
         name: selectedFile.name,
         size: selectedFile.size,
@@ -129,7 +130,12 @@ const UploadData = () => {
       };
       
       localStorage.setItem('currentFile', JSON.stringify(fileInfo));
-      localStorage.setItem('processedData', JSON.stringify(processed));
+      // Store only essential processed data
+      localStorage.setItem('processedData', JSON.stringify({
+        variables: processed.variables,
+        previewRows: processed.previewRows,
+        totalRows: processed.totalRows
+      }));
       localStorage.setItem('isSampleData', 'false');
       
       setShowProjectDialog(true);
@@ -137,7 +143,7 @@ const UploadData = () => {
     } catch (error) {
       console.error('Error processing file:', error);
       toast.error('Error processing file', {
-        description: error instanceof Error ? error.message : 'Failed to process the uploaded file',
+        description: error instanceof Error ? error.message : 'Failed to process the uploaded file. The file may be too large or contain invalid data.',
       });
       setFile(null);
     } finally {
@@ -157,8 +163,12 @@ const UploadData = () => {
       columns: processedData.variables.length
     };
     
-    // Create and save the project
-    createProject(projectName, fileInfo, processedData);
+    // Create and save the project (only essential data)
+    createProject(projectName, fileInfo, {
+      variables: processedData.variables,
+      previewRows: processedData.previewRows,
+      totalRows: processedData.totalRows
+    });
     
     toast.success('Project created successfully', {
       description: `"${projectName}" is ready for analysis`,
@@ -189,15 +199,32 @@ const UploadData = () => {
                       ? 'bg-green-50 border-2 border-dashed border-green-300'
                       : ''
                 }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const droppedFile = e.dataTransfer.files[0];
+                    handleFileSelection(droppedFile);
+                  }
+                }}
               >
                 {isProcessing ? (
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-research-700 mx-auto mb-4"></div>
                     <p className="text-research-700 font-medium">Processing your file...</p>
-                    <p className="text-sm text-gray-500 mt-1">This may take a moment</p>
+                    <p className="text-sm text-gray-500 mt-1">This may take a moment for large files</p>
                   </div>
                 ) : file ? (
                   <div className="text-center">
@@ -250,7 +277,12 @@ const UploadData = () => {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   className="hidden"
-                  onChange={handleFileChange}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      const selectedFile = e.target.files[0];
+                      handleFileSelection(selectedFile);
+                    }
+                  }}
                 />
               </div>
             </CardContent>

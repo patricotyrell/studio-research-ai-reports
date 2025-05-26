@@ -1,3 +1,4 @@
+
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 
@@ -149,8 +150,8 @@ export const getCompletedSteps = () => {
   return JSON.parse(stepsData);
 };
 
-// Enhanced process file data to handle both CSV and Excel files
-export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number, allRows?: any[] }> => {
+// Enhanced process file data to handle both CSV and Excel files with memory optimization
+export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   const fileName = file.name.toLowerCase();
   const isCSV = fileName.endsWith('.csv');
   const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
@@ -161,20 +162,21 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   
   if (isExcel) {
     const result = await parseExcelFile(file, selectedSheet);
-    return {
+    // For Excel, store only essential data
+    const optimizedResult = {
       variables: result.variables,
       previewRows: result.previewRows,
-      totalRows: result.totalRows,
-      allRows: result.previewRows // For now, Excel parsing returns limited rows
+      totalRows: result.totalRows
     };
+    return optimizedResult;
   }
   
-  // Handle CSV files (existing logic)
-  return processCSVData(file);
+  // Handle CSV files with memory optimization
+  return processCSVDataOptimized(file);
 };
 
-// Process CSV data to extract variables and preview rows
-export const processCSVData = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number, allRows?: any[] }> => {
+// Optimized CSV processing that doesn't store all rows in memory
+export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -191,26 +193,26 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
         // Parse header
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         
-        // Parse ALL data rows (not just preview)
-        const dataRows = lines.slice(1).map(line => {
+        // Process only a sample of rows for analysis (first 1000 rows)
+        const sampleSize = Math.min(1000, lines.length - 1);
+        const sampleRows = lines.slice(1, sampleSize + 1).map(line => {
           const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
           const row: any = {};
           headers.forEach((header, index) => {
             const value = values[index] || null;
-            // Convert empty strings to null
             row[header] = value === '' ? null : value;
           });
           return row;
         });
         
-        console.log('Processed CSV data - total rows:', dataRows.length);
-        console.log('First few rows:', dataRows.slice(0, 3));
+        console.log('Processing CSV data optimized - sample rows:', sampleRows.length);
+        console.log('Total file rows:', lines.length - 1);
         
-        // Analyze variables
+        // Analyze variables based on sample
         const variables: DataVariable[] = headers.map(header => {
-          const values = dataRows.map(row => row[header]).filter(v => v !== null && v !== '');
+          const values = sampleRows.map(row => row[header]).filter(v => v !== null && v !== '');
           const uniqueValues = [...new Set(values)];
-          const missingCount = dataRows.length - values.length;
+          const missingCount = sampleRows.length - values.length;
           
           // Determine variable type
           let type: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
@@ -220,14 +222,11 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
           if (numericValues.length === values.length && values.length > 0) {
             type = 'numeric';
           } else if (uniqueValues.length <= 10 && values.length > uniqueValues.length * 2) {
-            // If unique values are few and repeated, likely categorical
             type = 'categorical';
           } else if (values.some(v => /^\d{4}-\d{2}-\d{2}/.test(v))) {
-            // Basic date pattern check
             type = 'date';
           }
 
-          // For categorical variables, create a mapping of original labels to numeric codes
           const coding: { [key: string]: number } = {};
           if (type === 'categorical') {
             uniqueValues.forEach((value, index) => {
@@ -246,14 +245,18 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
           };
         });
         
-        // Get preview rows (first 5) and store all rows
-        const previewRows = dataRows.slice(0, 5);
+        // Store the file for later access but don't store all data in localStorage
+        const fileUrl = URL.createObjectURL(file);
+        sessionStorage.setItem('uploadedFileUrl', fileUrl);
+        sessionStorage.setItem('uploadedFileName', file.name);
+        
+        const previewRows = sampleRows.slice(0, 5);
+        const totalRows = lines.length - 1;
         
         resolve({
           variables,
           previewRows,
-          totalRows: dataRows.length,
-          allRows: dataRows // Store all rows for pagination
+          totalRows
         });
       } catch (error) {
         reject(error);
@@ -299,7 +302,7 @@ export const getDatasetPreviewRows = () => {
   // First try to get prepared data rows (post data-prep)
   const preparedData = getPreparedDataRows();
   if (preparedData && preparedData.length > 0) {
-    return preparedData.slice(0, 5); // Return first 5 for preview
+    return preparedData.slice(0, 5);
   }
   
   if (isSampleData() && fileInfo.id) {
@@ -317,8 +320,49 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
+// Function to load data chunks on demand
+export const loadDataChunk = async (startRow: number, rowCount: number): Promise<any[]> => {
+  const fileUrl = sessionStorage.getItem('uploadedFileUrl');
+  const fileName = sessionStorage.getItem('uploadedFileName');
+  
+  if (!fileUrl || !fileName) {
+    console.log('No file URL found, returning empty array');
+    return [];
+  }
+  
+  try {
+    const response = await fetch(fileUrl);
+    const text = await response.text();
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const dataLines = lines.slice(1);
+    
+    const startIndex = Math.max(0, startRow);
+    const endIndex = Math.min(dataLines.length, startRow + rowCount);
+    
+    const rows = dataLines.slice(startIndex, endIndex).map(line => {
+      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const row: any = {};
+      headers.forEach((header, index) => {
+        const value = values[index] || null;
+        row[header] = value === '' ? null : value;
+      });
+      return row;
+    });
+    
+    console.log(`Loaded chunk: rows ${startIndex} to ${endIndex}, count: ${rows.length}`);
+    return rows;
+  } catch (error) {
+    console.error('Error loading data chunk:', error);
+    return [];
+  }
+};
+
 // Updated function to get full dataset rows for pagination
-export const getFullDatasetRows = () => {
+export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) {
     console.log('getFullDatasetRows: No file info found');
@@ -328,25 +372,23 @@ export const getFullDatasetRows = () => {
   // First try to get prepared data rows (post data-prep)
   const preparedData = getPreparedDataRows();
   if (preparedData && preparedData.length > 0) {
-    console.log('getFullDatasetRows: Using prepared data, rows:', preparedData.length);
-    return preparedData;
+    console.log('getFullDatasetRows: Using prepared data, total rows:', preparedData.length);
+    const startIndex = page * rowsPerPage;
+    return preparedData.slice(startIndex, startIndex + rowsPerPage);
   }
   
   if (isSampleData() && fileInfo.id) {
     const sampleData = getSampleDataset(fileInfo.id);
-    // For sample data, generate more rows for demonstration
     const baseRows = sampleData?.previewRows || [];
     if (baseRows.length > 0) {
-      // Generate additional sample rows by duplicating and modifying the base rows
+      // Generate additional sample rows for demonstration
       const extendedRows = [];
       for (let i = 0; i < Math.min(100, fileInfo.rows || 50); i++) {
         const baseRow = baseRows[i % baseRows.length];
         const modifiedRow = { ...baseRow };
         
-        // Add some variation to make the data look more realistic
         Object.keys(modifiedRow).forEach(key => {
           if (modifiedRow[key] && typeof modifiedRow[key] === 'string') {
-            // Add row index to some fields to make them unique
             if (key.toLowerCase().includes('id') || key.toLowerCase().includes('name')) {
               modifiedRow[key] = `${modifiedRow[key]}_${i + 1}`;
             }
@@ -356,37 +398,15 @@ export const getFullDatasetRows = () => {
         extendedRows.push(modifiedRow);
       }
       console.log('getFullDatasetRows: Using sample data, generated rows:', extendedRows.length);
-      return extendedRows;
+      const startIndex = page * rowsPerPage;
+      return extendedRows.slice(startIndex, startIndex + rowsPerPage);
     }
     return baseRows;
   }
   
-  // For real uploaded files, get from processed data
-  const processedData = localStorage.getItem('processedData');
-  if (processedData) {
-    const data = JSON.parse(processedData);
-    console.log('getFullDatasetRows: Processing uploaded file data');
-    console.log('getFullDatasetRows: processedData keys:', Object.keys(data));
-    
-    // Check if we have stored all rows from the original processing
-    if (data.allRows && data.allRows.length > 0) {
-      console.log('getFullDatasetRows: Found allRows in processed data, count:', data.allRows.length);
-      return data.allRows;
-    }
-    
-    // Fallback to preview rows if allRows not available
-    const previewRows = data.previewRows || [];
-    console.log('getFullDatasetRows: Using preview rows as fallback, count:', previewRows.length);
-    
-    if (previewRows.length > 0) {
-      // Since we only have preview rows, just return them for now
-      // In a real scenario, we'd need to re-process the file to get all rows
-      return previewRows;
-    }
-  }
-  
-  console.log('getFullDatasetRows: No data found, returning empty array');
-  return [];
+  // For uploaded files, load data on demand
+  const startRow = page * rowsPerPage;
+  return await loadDataChunk(startRow, rowsPerPage);
 };
 
 // Save prepared variables data
