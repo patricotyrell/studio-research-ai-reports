@@ -27,7 +27,10 @@ const PaginatedDataPreview: React.FC = () => {
   // Simplified data loading function
   const loadPageData = useCallback(async (page: number) => {
     if (!variables || variables.length === 0 || !fileInfo) {
-      console.log('Skipping load - no variables or file info');
+      console.log('Skipping load - no variables or file info:', {
+        variablesLength: variables?.length || 0,
+        hasFileInfo: !!fileInfo
+      });
       return;
     }
     
@@ -37,7 +40,7 @@ const PaginatedDataPreview: React.FC = () => {
     
     try {
       const rows = await getFullDatasetRows(page, rowsPerPage);
-      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows', rows);
+      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows');
       
       if (rows.length === 0 && page === 0) {
         setError('No data found. Please check your file format and try again.');
@@ -59,16 +62,16 @@ const PaginatedDataPreview: React.FC = () => {
   
   // Load data when component mounts or page changes
   useEffect(() => {
-    if (variables.length > 0 && fileInfo) {
+    if (variables && variables.length > 0 && fileInfo) {
       console.log(`Effect triggered: Loading data for page ${currentPage}`);
       loadPageData(currentPage);
     } else {
       console.log('Effect triggered but missing data:', {
-        variablesLength: variables.length,
+        variablesLength: variables?.length || 0,
         hasFileInfo: !!fileInfo
       });
     }
-  }, [currentPage, variables.length, fileInfo, loadPageData]);
+  }, [currentPage, loadPageData]);
   
   // Retry function
   const handleRetry = useCallback(() => {

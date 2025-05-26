@@ -172,10 +172,10 @@ const parseCSVLine = (line: string): string[] => {
   return result.map(field => field.replace(/^"|"$/g, ''));
 };
 
-// In-memory storage for large datasets
-let inMemoryDataset: any = null;
+// Simplified data storage - just store everything in localStorage
+let datasetCache: { allRows: any[], variables: DataVariable[] } | null = null;
 
-// Enhanced process file data with memory-efficient storage
+// Enhanced process file data with simplified storage
 export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   const fileName = file.name.toLowerCase();
   const isCSV = fileName.endsWith('.csv');
@@ -190,24 +190,17 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   if (isExcel) {
     const result = await parseExcelFile(file, selectedSheet);
     
-    // Store data efficiently
-    inMemoryDataset = {
-      variables: result.variables,
-      allRows: result.previewRows, // This contains all parsed rows
-      totalRows: result.totalRows,
-      fileType: 'excel'
+    // Store all data in cache and localStorage
+    datasetCache = {
+      allRows: result.previewRows, // This contains all parsed rows from Excel
+      variables: result.variables
     };
     
-    // Only store essential metadata in localStorage
     try {
-      localStorage.setItem('datasetMeta', JSON.stringify({
-        hasData: true,
-        totalRows: result.totalRows,
-        variables: result.variables,
-        fileType: 'excel'
-      }));
+      localStorage.setItem('datasetRows', JSON.stringify(result.previewRows));
+      localStorage.setItem('datasetVariables', JSON.stringify(result.variables));
     } catch (e) {
-      console.warn('Could not save metadata to localStorage:', e);
+      console.warn('Could not save to localStorage, using cache only:', e);
     }
     
     return result;
@@ -217,7 +210,7 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   return processCSVDataOptimized(file);
 };
 
-// Optimized CSV processing with memory-efficient storage
+// Optimized CSV processing with simplified storage
 export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -236,14 +229,11 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
         const headers = parseCSVLine(lines[0]);
         console.log('CSV headers found:', headers.length);
         
-        // Process data in chunks to avoid memory issues
+        // Process all rows
         const allRows = [];
-        const totalDataLines = lines.length - 1;
-        const chunkSize = 1000;
         
-        console.log('Processing', totalDataLines, 'data rows in chunks');
+        console.log('Processing', lines.length - 1, 'data rows');
         
-        // Process all rows but limit what we store in localStorage
         for (let i = 1; i < lines.length; i++) {
           try {
             const values = parseCSVLine(lines[i]);
@@ -260,16 +250,7 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
         
         console.log('Successfully processed', allRows.length, 'rows');
         
-        // Store full dataset in memory
-        inMemoryDataset = {
-          variables: null, // Will be set below
-          allRows,
-          totalRows: allRows.length,
-          fileType: 'csv',
-          headers
-        };
-        
-        // Analyze variables based on sample (first 1000 rows)
+        // Analyze variables based on sample
         const sampleSize = Math.min(1000, allRows.length);
         const sampleRows = allRows.slice(0, sampleSize);
         
@@ -309,19 +290,14 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
           };
         });
         
-        // Update in-memory dataset with variables
-        inMemoryDataset.variables = variables;
+        // Store in cache and localStorage
+        datasetCache = { allRows, variables };
         
-        // Only store essential metadata in localStorage
         try {
-          localStorage.setItem('datasetMeta', JSON.stringify({
-            hasData: true,
-            totalRows: allRows.length,
-            variables: variables,
-            fileType: 'csv'
-          }));
+          localStorage.setItem('datasetRows', JSON.stringify(allRows));
+          localStorage.setItem('datasetVariables', JSON.stringify(variables));
         } catch (e) {
-          console.warn('Could not save metadata to localStorage:', e);
+          console.warn('Could not save to localStorage, using cache only:', e);
         }
         
         const previewRows = allRows.slice(0, 5);
@@ -358,23 +334,22 @@ export const getDatasetVariables = () => {
     return sampleData?.variables || [];
   }
   
-  // Try to get from in-memory dataset first
-  if (inMemoryDataset?.variables) {
-    return inMemoryDataset.variables;
+  // Try cache first
+  if (datasetCache?.variables) {
+    return datasetCache.variables;
   }
   
-  // Fallback to metadata in localStorage
+  // Try localStorage
   try {
-    const metadata = localStorage.getItem('datasetMeta');
-    if (metadata) {
-      const data = JSON.parse(metadata);
-      return data.variables || [];
+    const variables = localStorage.getItem('datasetVariables');
+    if (variables) {
+      return JSON.parse(variables);
     }
   } catch (e) {
-    console.warn('Error reading dataset metadata:', e);
+    console.warn('Error reading variables from localStorage:', e);
   }
   
-  // Final fallback to processedData
+  // Fallback to processedData
   const processedData = localStorage.getItem('processedData');
   if (processedData) {
     const data = JSON.parse(processedData);
@@ -400,12 +375,23 @@ export const getDatasetPreviewRows = () => {
     return sampleData?.previewRows || [];
   }
   
-  // Try in-memory dataset first
-  if (inMemoryDataset?.allRows) {
-    return inMemoryDataset.allRows.slice(0, 5);
+  // Try cache first
+  if (datasetCache?.allRows) {
+    return datasetCache.allRows.slice(0, 5);
   }
   
-  // For real uploaded files, get from processed data
+  // Try localStorage
+  try {
+    const rows = localStorage.getItem('datasetRows');
+    if (rows) {
+      const allRows = JSON.parse(rows);
+      return allRows.slice(0, 5);
+    }
+  } catch (e) {
+    console.warn('Error reading rows from localStorage:', e);
+  }
+  
+  // Fallback to processedData
   const processedData = localStorage.getItem('processedData');
   if (processedData) {
     const data = JSON.parse(processedData);
@@ -415,7 +401,7 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
-// Optimized function to get full dataset rows for pagination
+// Simplified function to get full dataset rows for pagination
 export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) {
@@ -464,49 +450,25 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     }
   }
   
-  // Use in-memory dataset for real uploaded files
-  if (inMemoryDataset?.allRows) {
-    console.log(`Loading from in-memory dataset: ${inMemoryDataset.allRows.length} total rows`);
-    
+  // Use cache first for real uploaded files
+  if (datasetCache?.allRows) {
+    console.log(`Loading from cache: ${datasetCache.allRows.length} total rows`);
     const startIndex = page * rowsPerPage;
-    const endIndex = Math.min(startIndex + rowsPerPage, inMemoryDataset.allRows.length);
-    const pageRows = inMemoryDataset.allRows.slice(startIndex, endIndex);
-    
-    console.log(`Returning rows ${startIndex} to ${endIndex}: ${pageRows.length} rows`);
+    const pageRows = datasetCache.allRows.slice(startIndex, startIndex + rowsPerPage);
+    console.log(`Returning rows ${startIndex} to ${startIndex + pageRows.length}: ${pageRows.length} rows`);
     return pageRows;
   }
   
-  // Fallback to localStorage data
+  // Try localStorage
   try {
-    const processedData = localStorage.getItem('processedData');
-    if (processedData) {
-      console.log('Falling back to localStorage processedData');
-      const data = JSON.parse(processedData);
-      if (data.previewRows && Array.isArray(data.previewRows)) {
-        // For real data, we need to generate more rows from the preview
-        const baseRows = data.previewRows;
-        const extendedRows = [];
-        const totalRows = fileInfo.rows || baseRows.length;
-        
-        for (let i = 0; i < totalRows; i++) {
-          const baseRow = baseRows[i % baseRows.length];
-          const modifiedRow = { ...baseRow };
-          
-          // Add row index to make each row unique
-          Object.keys(modifiedRow).forEach(key => {
-            if (modifiedRow[key] && typeof modifiedRow[key] === 'string') {
-              if (key.toLowerCase().includes('id')) {
-                modifiedRow[key] = `${modifiedRow[key]}_${i + 1}`;
-              }
-            }
-          });
-          
-          extendedRows.push(modifiedRow);
-        }
-        
-        const startIndex = page * rowsPerPage;
-        return extendedRows.slice(startIndex, startIndex + rowsPerPage);
-      }
+    const rows = localStorage.getItem('datasetRows');
+    if (rows) {
+      console.log('Loading from localStorage');
+      const allRows = JSON.parse(rows);
+      const startIndex = page * rowsPerPage;
+      const pageRows = allRows.slice(startIndex, startIndex + rowsPerPage);
+      console.log(`Returning rows ${startIndex} to ${startIndex + pageRows.length}: ${pageRows.length} rows`);
+      return pageRows;
     }
   } catch (error) {
     console.error('Error reading from localStorage:', error);
