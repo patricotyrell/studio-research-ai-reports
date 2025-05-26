@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,19 +115,11 @@ const PaginatedDataPreview: React.FC = () => {
   const totalPages = Math.ceil(totalRows / rowsPerPage);
   const startIndex = currentPage * rowsPerPage;
   const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
-  const isLargeDataset = totalRows > 10000;
   
   return (
     <Card>
       <CardHeader className="py-4 px-6">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-lg">Data Preview</CardTitle>
-          {isLargeDataset && (
-            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-              Large dataset: {totalRows.toLocaleString()} rows
-            </div>
-          )}
-        </div>
+        <CardTitle className="text-lg">Data Preview</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {/* Loading State */}
