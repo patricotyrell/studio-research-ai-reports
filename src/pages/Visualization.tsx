@@ -12,7 +12,8 @@ import ChartRenderer from '@/components/visualization/ChartRenderer';
 import ChartValidationAlert from '@/components/visualization/ChartValidationAlert';
 import InsightsPanel from '@/components/visualization/InsightsPanel';
 import { getDatasetForAnalysis, getCurrentDatasetState } from '@/utils/dataUtils';
-import { getDatasetInfo } from '@/utils/datasetCache';
+import { getDatasetInfo, initializeSampleDataCache } from '@/utils/datasetCache';
+import { getSampleDataset } from '@/services/sampleDataService';
 
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
 
@@ -34,7 +35,8 @@ const Visualization = () => {
     const currentState = getCurrentDatasetState();
     console.log('📊 Visualization - Current dataset state:', currentState);
     
-    const analysisDataset = getDatasetForAnalysis();
+    // Try to get analysis dataset
+    let analysisDataset = getDatasetForAnalysis();
     console.log('📊 Visualization - Dataset for analysis:', {
       variables: analysisDataset.variables.length,
       rows: analysisDataset.rows.length,
@@ -42,6 +44,22 @@ const Visualization = () => {
       isRealData: analysisDataset.isRealData,
       prepChanges: Object.keys(analysisDataset.prepChanges)
     });
+    
+    // If no real data is available, initialize with sample data
+    if (!analysisDataset.isRealData || analysisDataset.rows.length === 0) {
+      console.log('📊 No real data found, initializing sample data for visualization');
+      
+      // Get sample data and initialize cache
+      const sampleData = getSampleDataset();
+      if (sampleData) {
+        initializeSampleDataCache(sampleData);
+        analysisDataset = getDatasetForAnalysis();
+        console.log('📊 Sample data initialized for visualization:', {
+          variables: analysisDataset.variables.length,
+          rows: analysisDataset.rows.length
+        });
+      }
+    }
     
     // Verify dataset integrity
     if (analysisDataset.rows.length === 0) {
@@ -95,7 +113,7 @@ const Visualization = () => {
           <Alert className="max-w-2xl mx-auto">
             <Info className="h-4 w-4" />
             <AlertDescription>
-              No dataset found. Please upload and prepare your data first.
+              No dataset found. Please upload and prepare your data first, or the system will load sample data automatically.
             </AlertDescription>
           </Alert>
         </div>
