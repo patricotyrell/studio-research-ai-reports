@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StepIndicator from '@/components/StepIndicator';
@@ -12,7 +11,7 @@ import ChartRenderer from '@/components/visualization/ChartRenderer';
 import ChartValidationAlert from '@/components/visualization/ChartValidationAlert';
 import InsightsPanel from '@/components/visualization/InsightsPanel';
 import { getDatasetForAnalysis, getCurrentDatasetState } from '@/utils/dataUtils';
-import { getDatasetInfo } from '@/utils/datasetCache';
+import { getDatasetInfo, getAllDatasetRows, getDatasetVariables } from '@/utils/datasetCache';
 
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
 
@@ -25,26 +24,40 @@ const Visualization = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // CRITICAL: Log transition to visualization module
-    console.log('🎨 VISUALIZATION MODULE - Loading dataset');
+    // ENHANCED: Enhanced debugging to trace data flow
+    console.log('🎨 VISUALIZATION MODULE - Starting data load process');
     
+    // First, check what's in the cache directly
+    const directRows = getAllDatasetRows();
+    const directVariables = getDatasetVariables();
     const datasetInfo = getDatasetInfo();
-    console.log('📊 Visualization - Dataset info on mount:', datasetInfo);
     
-    const currentState = getCurrentDatasetState();
-    console.log('📊 Visualization - Current dataset state:', currentState);
-    
-    // Get analysis dataset (only real/modified data)
-    const analysisDataset = getDatasetForAnalysis();
-    console.log('📊 Visualization - Dataset for analysis:', {
-      variables: analysisDataset.variables.length,
-      rows: analysisDataset.rows.length,
-      sessionId: analysisDataset.sessionId,
-      isRealData: analysisDataset.isRealData,
-      prepChanges: Object.keys(analysisDataset.prepChanges)
+    console.log('🔍 DIRECT CACHE CHECK:', {
+      directRows: directRows.length,
+      directVariables: directVariables.length,
+      datasetInfo
     });
     
-    // FIXED: More permissive check - load if we have any data with variables and rows
+    // Then check current state
+    const currentState = getCurrentDatasetState();
+    console.log('📊 CURRENT STATE CHECK:', {
+      variables: currentState.variables.length,
+      rows: currentState.rows.length,
+      isRealData: currentState.isRealData,
+      sessionId: currentState.sessionId
+    });
+    
+    // Finally check analysis dataset
+    const analysisDataset = getDatasetForAnalysis();
+    console.log('🎯 ANALYSIS DATASET CHECK:', {
+      variables: analysisDataset.variables.length,
+      rows: analysisDataset.rows.length,
+      isRealData: analysisDataset.isRealData,
+      sessionId: analysisDataset.sessionId,
+      sampleRows: analysisDataset.rows.slice(0, 3)
+    });
+    
+    // Validation check
     const hasValidData = analysisDataset.variables && 
                         analysisDataset.variables.length > 0 && 
                         analysisDataset.rows && 
@@ -54,7 +67,13 @@ const Visualization = () => {
       console.error('🚨 CRITICAL: No valid dataset found for visualization!', {
         hasVariables: !!(analysisDataset.variables && analysisDataset.variables.length > 0),
         hasRows: !!(analysisDataset.rows && analysisDataset.rows.length > 0),
-        isRealData: analysisDataset.isRealData
+        isRealData: analysisDataset.isRealData,
+        debugInfo: {
+          directCacheRows: directRows.length,
+          directCacheVariables: directVariables.length,
+          currentStateRows: currentState.rows.length,
+          analysisDatasetRows: analysisDataset.rows.length
+        }
       });
     } else {
       console.log('✅ Dataset validation passed:', {
@@ -94,7 +113,7 @@ const Visualization = () => {
     );
   }
 
-  // FIXED: Check for valid data more comprehensively
+  // ENHANCED: More detailed validation check
   const hasValidData = dataset && 
                       dataset.variables && 
                       dataset.variables.length > 0 && 
@@ -109,8 +128,13 @@ const Visualization = () => {
             <Info className="h-4 w-4" />
             <AlertDescription>
               No dataset found. Please upload and prepare your data first before proceeding to visualization.
-              <div className="mt-2 text-xs text-gray-500">
-                Debug info: Variables: {dataset?.variables?.length || 0}, Rows: {dataset?.rows?.length || 0}, Real data: {dataset?.isRealData ? 'Yes' : 'No'}
+              <div className="mt-2 text-xs text-gray-500 font-mono">
+                <div>Debug info:</div>
+                <div>Variables: {dataset?.variables?.length || 0}</div>
+                <div>Rows: {dataset?.rows?.length || 0}</div>
+                <div>Real data: {dataset?.isRealData ? 'Yes' : 'No'}</div>
+                <div>Session ID: {dataset?.sessionId || 'None'}</div>
+                <div>Has metadata: {dataset?.metadata ? 'Yes' : 'No'}</div>
               </div>
             </AlertDescription>
           </Alert>
