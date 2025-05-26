@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -51,37 +50,47 @@ const DataPreparation = () => {
     }
   }, [navigate]);
 
-  // FIXED: Only apply changes when step is explicitly completed, not during navigation
+  // FIXED: Only apply changes when step is explicitly completed with real changes
   const handleStepComplete = (step: string, autoApplied: boolean, changes?: any) => {
     console.log(`Step ${step} completed with changes:`, changes);
     
-    // Store the changes for this step
-    if (changes) {
-      const newStepChanges = { ...stepChanges, [step]: changes };
-      setStepChanges(newStepChanges);
-      
-      // CRITICAL: Only apply changes to dataset when step is actually completed
-      // Import applyDataPrepChanges only when needed to avoid circular dependencies
-      import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
-        applyDataPrepChanges(step, changes);
-        
-        // Clear any subsequent step changes since data has changed
-        const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
-        const currentStepIndex = stepOrder.indexOf(step);
-        if (currentStepIndex >= 0) {
-          const updatedStepChanges = { ...newStepChanges };
-          stepOrder.slice(currentStepIndex + 1).forEach(laterStep => {
-            delete updatedStepChanges[laterStep];
-            // Also reset completion status for later steps
-            const newCompletedSteps = { ...completedSteps };
-            newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
-            setCompletedSteps(newCompletedSteps);
-            saveStepCompletion(laterStep, false);
-          });
-          setStepChanges(updatedStepChanges);
-        }
-      });
+    // CRITICAL: Only proceed if there are actual changes to apply
+    if (!changes || Object.keys(changes).length === 0) {
+      console.log('No changes to apply, marking step as completed but not modifying data');
+      // Mark step as completed but don't modify data
+      const newCompletedSteps = { ...completedSteps };
+      newCompletedSteps[step as keyof typeof completedSteps] = true;
+      setCompletedSteps(newCompletedSteps);
+      saveStepCompletion(step, true);
+      return;
     }
+    
+    // Store the changes for this step
+    const newStepChanges = { ...stepChanges, [step]: changes };
+    setStepChanges(newStepChanges);
+    
+    // CRITICAL: Only apply changes to dataset when step is actually completed WITH changes
+    // Import applyDataPrepChanges only when needed to avoid circular dependencies
+    import('@/utils/dataUtils').then(({ applyDataPrepChanges }) => {
+      console.log('APPLYING CHANGES to dataset for step:', step);
+      applyDataPrepChanges(step, changes);
+      
+      // Clear any subsequent step changes since data has changed
+      const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
+      const currentStepIndex = stepOrder.indexOf(step);
+      if (currentStepIndex >= 0) {
+        const updatedStepChanges = { ...newStepChanges };
+        stepOrder.slice(currentStepIndex + 1).forEach(laterStep => {
+          delete updatedStepChanges[laterStep];
+          // Also reset completion status for later steps
+          const newCompletedSteps = { ...completedSteps };
+          newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
+          setCompletedSteps(newCompletedSteps);
+          saveStepCompletion(laterStep, false);
+        });
+        setStepChanges(updatedStepChanges);
+      }
+    });
     
     // Mark step as completed
     const newCompletedSteps = { ...completedSteps };
@@ -92,8 +101,9 @@ const DataPreparation = () => {
     saveStepCompletion(step, true);
   };
   
-  // FIXED: Navigation should not trigger data changes
+  // FIXED: Navigation should NEVER trigger data changes - pure navigation only
   const handleNext = () => {
+    console.log('Navigation: Moving to next step (no data changes)');
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep(prev => prev + 1);
     } else {
@@ -103,18 +113,20 @@ const DataPreparation = () => {
   };
   
   const handleBack = () => {
+    console.log('Navigation: Moving to previous step (no data changes)');
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
     }
   };
 
   const handleSkipToSummary = () => {
+    console.log('Navigation: Skipping to summary (no data changes)');
     setCurrentStep(7);
   };
 
-  // FIXED: Step navigation should not modify data
+  // FIXED: Step navigation should NEVER modify data - pure navigation only
   const handleNavigateToStep = (step: number) => {
-    console.log(`Navigating to step ${step} without applying changes`);
+    console.log(`Navigation: Moving to step ${step} (NO data changes applied)`);
     setCurrentStep(step);
   };
   

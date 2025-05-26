@@ -71,9 +71,21 @@ export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepN
     wasRealData: datasetCache.isRealData
   });
   
-  // CRITICAL: Only update if we have real data, don't let sample data override
-  if (!datasetCache.isRealData && rows.length < 1000) {
-    console.warn('Preventing sample data from overriding real dataset');
+  // CRITICAL: Only update if we have real data loaded
+  if (!datasetCache.isRealData) {
+    console.warn('BLOCKING: Cannot update dataset cache - no real data loaded. Current data:', {
+      isRealData: datasetCache.isRealData,
+      currentRows: datasetCache.allRows.length
+    });
+    return;
+  }
+  
+  // ADDITIONAL CHECK: Don't let small datasets override large ones unless explicitly intended
+  if (datasetCache.originalRows.length > 1000 && rows.length < 1000) {
+    console.warn('BLOCKING: Preventing small dataset from overriding large dataset:', {
+      originalRows: datasetCache.originalRows.length,
+      newRows: rows.length
+    });
     return;
   }
   
@@ -157,8 +169,11 @@ export const getDatasetPreviewRows = (): any[] => {
 export const getAllDatasetRows = (): any[] => {
   console.log('Getting all dataset rows:', {
     count: datasetCache.allRows.length,
-    isRealData: datasetCache.isRealData
+    isRealData: datasetCache.isRealData,
+    originalCount: datasetCache.originalRows.length
   });
+  
+  // CRITICAL: Always return the current dataset state (including any applied changes)
   return [...datasetCache.allRows]; // Return copy to prevent mutation
 };
 
@@ -182,7 +197,7 @@ export const getPrepChanges = (stepName?: string) => {
 
 // Check if dataset is loaded
 export const isDatasetLoaded = (): boolean => {
-  return datasetCache.allRows.length > 0 && datasetCache.variables.length > 0;
+  return datasetCache.allRows.length > 0 && datasetCache.variables.length > 0 && datasetCache.isRealData;
 };
 
 // Clear the cache
@@ -227,15 +242,29 @@ export const restoreDatasetState = () => {
   return false;
 };
 
-// FIXED: Initialize sample data cache - only if no real data exists
+// FIXED: Initialize sample data cache - ONLY if no real data exists and explicitly called
 export const initializeSampleDataCache = (sampleData: any) => {
-  // CRITICAL: Don't override real data with sample data
+  // CRITICAL: NEVER override real data with sample data
   if (datasetCache.isRealData && datasetCache.allRows.length > 0) {
-    console.log('Skipping sample data initialization - real data already loaded');
+    console.log('BLOCKING: Sample data initialization blocked - real data already loaded:', {
+      realDataRows: datasetCache.allRows.length,
+      isRealData: datasetCache.isRealData
+    });
+    return;
+  }
+  
+  // Only initialize if cache is completely empty
+  if (datasetCache.allRows.length > 0) {
+    console.log('BLOCKING: Sample data initialization blocked - cache already has data:', {
+      currentRows: datasetCache.allRows.length,
+      isRealData: datasetCache.isRealData
+    });
     return;
   }
   
   if (sampleData?.variables && sampleData?.previewRows) {
+    console.log('Initializing sample data cache (only because cache was empty)');
+    
     // Generate extended rows for sample data
     const extendedRows = [];
     const baseRows = sampleData.previewRows;
@@ -273,6 +302,7 @@ export const getDatasetInfo = () => {
     totalVariables: datasetCache.variables.length,
     isRealData: datasetCache.isRealData,
     hasOriginal: datasetCache.originalRows.length > 0,
-    prepSteps: Object.keys(datasetCache.prepChanges)
+    prepSteps: Object.keys(datasetCache.prepChanges),
+    originalRows: datasetCache.originalRows.length
   };
 };

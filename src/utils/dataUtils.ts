@@ -420,19 +420,27 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
   });
 };
 
-// Simplified functions using the new cache system
+// Simplified functions using the new cache system with proper real data protection
 export const getDatasetVariables = () => {
-  const fileInfo = getCurrentFile();
-  if (!fileInfo) return [];
+  // CRITICAL: Always use cached data first if available and real
+  if (isDatasetLoaded()) {
+    console.log('Using cached variables (real data)');
+    return getCachedVariables();
+  }
   
-  // Check if using sample data
-  if (isSampleData() && fileInfo.id) {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) {
+    console.log('No file info found');
+    return [];
+  }
+  
+  // ONLY use sample data if no real data is cached AND we're explicitly in sample mode
+  if (isSampleData() && fileInfo.id && !isDatasetLoaded()) {
+    console.log('Loading sample data (no real data in cache)');
     const sampleData = getSampleDataset(fileInfo.id);
     if (sampleData) {
-      // Initialize cache with sample data if not already done
-      if (!isDatasetLoaded()) {
-        initializeSampleDataCache(sampleData);
-      }
+      initializeSampleDataCache(sampleData);
+      return getCachedVariables();
     }
   }
   
@@ -440,50 +448,63 @@ export const getDatasetVariables = () => {
 };
 
 export const getDatasetPreviewRows = () => {
+  // CRITICAL: Always use cached data first if available and real
+  if (isDatasetLoaded()) {
+    console.log('Using cached preview rows (real data)');
+    return getCachedPreviewRows();
+  }
+  
   const fileInfo = getCurrentFile();
   if (!fileInfo) return [];
   
-  // Check if using sample data
-  if (isSampleData() && fileInfo.id) {
+  // ONLY use sample data if no real data is cached AND we're explicitly in sample mode
+  if (isSampleData() && fileInfo.id && !isDatasetLoaded()) {
+    console.log('Loading sample preview rows (no real data in cache)');
     const sampleData = getSampleDataset(fileInfo.id);
     if (sampleData) {
-      // Initialize cache with sample data if not already done
-      if (!isDatasetLoaded()) {
-        initializeSampleDataCache(sampleData);
-      }
+      initializeSampleDataCache(sampleData);
+      return getCachedPreviewRows();
     }
   }
   
   return getCachedPreviewRows();
 };
 
-// Simplified function for pagination - single source of truth
+// CRITICAL: Always return complete dataset from cache - never allow sample override
 export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
+  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
+  
+  // ALWAYS use cached data if available (real data has priority)
+  if (isDatasetLoaded()) {
+    const allRows = getCachedAllRows();
+    const startIndex = page * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedRows = allRows.slice(startIndex, endIndex);
+    
+    console.log(`Returning ${paginatedRows.length} rows from REAL DATA cache (${startIndex}-${endIndex} of ${allRows.length})`);
+    return paginatedRows;
+  }
+  
+  // Fallback to sample data ONLY if no real data exists
   const fileInfo = getCurrentFile();
   if (!fileInfo) {
     console.log('getFullDatasetRows: No file info found');
     return [];
   }
   
-  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
-  
-  // Check if using sample data
   if (isSampleData() && fileInfo.id) {
+    console.log('Using sample data as fallback (no real data available)');
     const sampleData = getSampleDataset(fileInfo.id);
-    if (sampleData && !isDatasetLoaded()) {
-      console.log('Initializing sample data cache');
+    if (sampleData) {
       initializeSampleDataCache(sampleData);
+      const allRows = getCachedAllRows();
+      const startIndex = page * rowsPerPage;
+      const endIndex = startIndex + rowsPerPage;
+      return allRows.slice(startIndex, endIndex);
     }
   }
   
-  // Get all rows from cache, then slice for pagination
-  const allRows = getCachedAllRows();
-  const startIndex = page * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const paginatedRows = allRows.slice(startIndex, endIndex);
-  
-  console.log(`Returning ${paginatedRows.length} rows from cache (${startIndex}-${endIndex})`);
-  return paginatedRows;
+  return [];
 };
 
 // Save prepared variables data
@@ -531,7 +552,7 @@ export const getCurrentDatasetState = () => {
   };
 };
 
-// Ensure data consistency when navigating to visualization/analysis
+// CRITICAL: Always return the complete current dataset (including all prep changes)
 export const getDatasetForAnalysis = () => {
   console.log('Getting dataset for analysis...');
   
@@ -544,7 +565,8 @@ export const getDatasetForAnalysis = () => {
   console.log('Dataset for analysis:', {
     variables: variables.length,
     rows: allRows.length,
-    prepChanges: Object.keys(prepChanges)
+    prepChanges: Object.keys(prepChanges),
+    isRealData: metadata ? 'Yes' : 'No'
   });
   
   return {
@@ -569,13 +591,18 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   const currentVars = getCachedVariables();
   const currentRows = getCachedAllRows();
   
+  console.log(`Current dataset before applying ${stepType}:`, {
+    variables: currentVars.length,
+    rows: currentRows.length
+  });
+  
   // Apply changes based on step type
   let updatedVars = [...currentVars];
   let updatedRows = [...currentRows];
   
   switch (stepType) {
     case 'missingValues':
-      // Handle missing values and invalid values for mixed numeric columns
+      // ... keep existing code (missing values handling) the same
       updatedVars = updatedVars.map(v => {
         let updatedVar = { ...v };
         
@@ -645,6 +672,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'standardizeVariables':
+      // ... keep existing code (variable standardization) the same
       console.log('Applying variable standardization:', changes);
       if (changes.standardizedNames) {
         // First update variables
@@ -698,6 +726,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'recodeVariables':
+      // ... keep existing code (recode variables) the same
       if (changes.recodedVariables) {
         changes.recodedVariables.forEach((recode: any) => {
           const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
@@ -716,6 +745,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'removeColumns':
+      // ... keep existing code (remove columns) the same
       if (changes.removedColumns) {
         updatedVars = updatedVars.filter(v => !changes.removedColumns.includes(v.name));
         updatedRows = updatedRows.map(row => {
@@ -729,6 +759,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'compositeScores':
+      // ... keep existing code (composite scores) the same
       if (changes.compositeVariables) {
         // Add new composite variables
         changes.compositeVariables.forEach((composite: any) => {
@@ -755,12 +786,13 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       // FIXED: Only remove duplicates if we have specific row indexes to remove
       if (changes.duplicatesRemoved > 0 && changes.rowIndexesToRemove && Array.isArray(changes.rowIndexesToRemove)) {
         const indexesToRemove = new Set(changes.rowIndexesToRemove);
-        console.log(`Removing ${indexesToRemove.size} specific duplicate rows:`, Array.from(indexesToRemove));
+        console.log(`Removing ${indexesToRemove.size} specific duplicate rows:`, Array.from(indexesToRemove).slice(0, 10));
         
         // Filter out the specific rows that were identified as duplicates
+        const originalLength = updatedRows.length;
         updatedRows = updatedRows.filter((_, index) => !indexesToRemove.has(index));
         
-        console.log(`Rows after duplicate removal: ${updatedRows.length} (removed ${indexesToRemove.size})`);
+        console.log(`Rows after duplicate removal: ${updatedRows.length} (removed ${originalLength - updatedRows.length})`);
       }
       
       // Handle inconsistent values standardization
@@ -795,14 +827,11 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
   }
   
-  console.log('Updated variables after data prep:', updatedVars.map(v => ({ 
-    name: v.name, 
-    type: v.type, 
-    missing: v.missing, 
-    invalidValues: v.invalidValues 
-  })));
-  
-  console.log(`Updated rows count: ${updatedRows.length} (was ${currentRows.length})`);
+  console.log(`Final result after applying ${stepType}:`, {
+    variables: updatedVars.length,
+    rows: updatedRows.length,
+    rowsChanged: currentRows.length !== updatedRows.length
+  });
   
   // Update the cache with the new state
   updateDatasetCache(updatedRows, updatedVars, stepType, changes);
