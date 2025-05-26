@@ -1,4 +1,3 @@
-
 import { getAllDatasetRows, getDatasetVariables, getDatasetMetadata, getPrepChanges, getDatasetInfo, isDatasetLoaded, setDatasetCache } from './datasetCache';
 import { DataVariable } from '@/services/sampleDataService';
 
@@ -157,7 +156,7 @@ export const getCompletedSteps = () => {
   }
 };
 
-// FIXED: Process file data with actual CSV/Excel parsing
+// FIXED: Process file data with correct DataVariable type
 export const processFileData = async (file: File, selectedSheet?: string) => {
   console.log('🔄 Processing file:', file.name);
   
@@ -176,14 +175,7 @@ export const processFileData = async (file: File, selectedSheet?: string) => {
       // Parse headers
       const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
       
-      // Create variables from headers
-      variables = headers.map((header, index) => ({
-        name: header || `Column_${index + 1}`,
-        type: 'text' as const,
-        index
-      }));
-      
-      // Parse data rows
+      // Parse data rows first to analyze them
       rows = lines.slice(1).map((line, rowIndex) => {
         const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
         const row: any = {};
@@ -196,6 +188,34 @@ export const processFileData = async (file: File, selectedSheet?: string) => {
         return row;
       });
       
+      // Create variables from headers with proper analysis
+      variables = headers.map((header, index) => {
+        const columnName = header || `Column_${index + 1}`;
+        const values = rows.map(row => row[columnName]).filter(val => val !== null && val !== undefined);
+        const uniqueValues = new Set(values).size;
+        const missingCount = rows.length - values.length;
+        const exampleValue = values.length > 0 ? String(values[0]) : '';
+        
+        // Detect type based on data
+        let detectedType: 'numeric' | 'categorical' | 'text' = 'text';
+        const numericCount = values.filter(val => !isNaN(parseFloat(String(val)))).length;
+        const numericRatio = numericCount / values.length;
+        
+        if (numericRatio > 0.8) {
+          detectedType = 'numeric';
+        } else if (uniqueValues < values.length * 0.5 && uniqueValues < 20) {
+          detectedType = 'categorical';
+        }
+        
+        return {
+          name: columnName,
+          type: detectedType,
+          missing: missingCount,
+          unique: uniqueValues,
+          example: exampleValue
+        };
+      });
+      
       console.log('✅ CSV parsed successfully:', {
         headers: headers.length,
         rows: rows.length,
@@ -205,18 +225,8 @@ export const processFileData = async (file: File, selectedSheet?: string) => {
     } else {
       // For now, create sample data structure for Excel files
       console.log('📋 Creating sample data structure for Excel file');
-      variables = [
-        { name: 'ID', type: 'numeric', index: 0 },
-        { name: 'Gender', type: 'categorical', index: 1 },
-        { name: 'Age', type: 'numeric', index: 2 },
-        { name: 'Smoking_Status', type: 'categorical', index: 3 },
-        { name: 'Exercise_Level', type: 'categorical', index: 4 },
-        { name: 'BMI', type: 'numeric', index: 5 },
-        { name: 'Has_Hypertension', type: 'categorical', index: 6 },
-        { name: 'Health_Score', type: 'numeric', index: 7 }
-      ];
       
-      // Generate sample rows
+      // Generate sample rows first
       for (let i = 0; i < 100; i++) {
         rows.push({
           ID: i + 1,
@@ -229,6 +239,18 @@ export const processFileData = async (file: File, selectedSheet?: string) => {
           Health_Score: 50 + Math.floor(Math.random() * 50)
         });
       }
+      
+      // Create variables with proper analysis
+      variables = [
+        { name: 'ID', type: 'numeric', missing: 0, unique: 100, example: '1' },
+        { name: 'Gender', type: 'categorical', missing: 0, unique: 2, example: 'Male' },
+        { name: 'Age', type: 'numeric', missing: 0, unique: 60, example: '25' },
+        { name: 'Smoking_Status', type: 'categorical', missing: 0, unique: 2, example: 'Non-Smoker' },
+        { name: 'Exercise_Level', type: 'categorical', missing: 0, unique: 3, example: 'Low' },
+        { name: 'BMI', type: 'numeric', missing: 0, unique: 100, example: '22.5' },
+        { name: 'Has_Hypertension', type: 'categorical', missing: 0, unique: 2, example: 'No' },
+        { name: 'Health_Score', type: 'numeric', missing: 0, unique: 50, example: '75' }
+      ];
     }
     
     // CRITICAL: Store data in the dataset cache
