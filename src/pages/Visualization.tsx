@@ -12,8 +12,7 @@ import ChartTypeSelector from '@/components/visualization/ChartTypeSelector';
 import ChartRenderer from '@/components/visualization/ChartRenderer';
 import ChartValidationAlert from '@/components/visualization/ChartValidationAlert';
 import InsightsPanel from '@/components/visualization/InsightsPanel';
-import { getDatasetForAnalysis, getCurrentDatasetState } from '@/utils/dataUtils';
-import { getDatasetInfo, getAllDatasetRows, getDatasetVariables } from '@/utils/datasetCache';
+import { getDatasetForAnalysis } from '@/utils/dataUtils';
 import { useNavigate } from 'react-router-dom';
 
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'boxplot' | 'histogram';
@@ -26,47 +25,28 @@ const Visualization = () => {
   const [isValidConfiguration, setIsValidConfiguration] = useState(false);
   const [dataset, setDataset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🎨 VISUALIZATION MODULE - Starting enhanced data load process');
+    console.log('🎨 VISUALIZATION - Loading data');
     
-    // Enhanced data loading with multiple fallbacks
     try {
-      // Step 1: Try to get analysis dataset
       const analysisDataset = getDatasetForAnalysis();
-      console.log('🎯 Analysis dataset retrieved:', {
+      console.log('📊 Dataset loaded:', {
         variables: analysisDataset.variables?.length || 0,
         rows: analysisDataset.rows?.length || 0,
-        isRealData: analysisDataset.isRealData,
-        sessionId: analysisDataset.sessionId
+        isRealData: analysisDataset.isRealData
       });
-
-      // Step 2: Validate the dataset
-      const hasValidData = analysisDataset.variables && 
-                          analysisDataset.variables.length > 0 && 
-                          analysisDataset.rows && 
-                          analysisDataset.rows.length > 0;
-
-      if (hasValidData) {
-        console.log('✅ Valid dataset found for visualization');
-        setDataset(analysisDataset);
-        setDataLoadError(null);
-      } else {
-        console.error('🚨 Invalid dataset structure');
-        setDataLoadError('Dataset structure is invalid or empty');
-      }
-
+      
+      setDataset(analysisDataset);
     } catch (error) {
-      console.error('🚨 Error loading dataset for visualization:', error);
-      setDataLoadError(`Failed to load dataset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ Error loading dataset:', error);
     }
     
     setLoading(false);
   }, []);
 
   const handleVariableSelect = (variables: string[]) => {
-    console.log('📊 Variables selected for visualization:', variables);
+    console.log('📊 Variables selected:', variables);
     setSelectedVariables(variables);
   };
 
@@ -77,14 +57,6 @@ const Visualization = () => {
 
   const handleValidationChange = (isValid: boolean) => {
     setIsValidConfiguration(isValid);
-  };
-
-  const handleReturnToUpload = () => {
-    navigate('/upload');
-  };
-
-  const handleReturnToOverview = () => {
-    navigate('/data-overview');
   };
 
   if (loading) {
@@ -100,61 +72,26 @@ const Visualization = () => {
     );
   }
 
-  // Enhanced error handling
-  if (dataLoadError || !dataset) {
+  if (!dataset || !dataset.variables || dataset.variables.length === 0) {
     return (
       <DashboardLayout>
         <div className="p-6">
-          <Alert className="max-w-2xl mx-auto border-red-200 bg-red-50">
-            <AlertTriangle className="h-4 w-4 text-red-600" />
+          <Alert className="max-w-2xl mx-auto border-yellow-200 bg-yellow-50">
+            <Info className="h-4 w-4 text-yellow-600" />
             <AlertDescription>
               <div className="space-y-3">
-                <p className="font-medium text-red-800">Unable to load data for visualization</p>
-                <p className="text-red-700">
-                  {dataLoadError || 'No dataset found. Please ensure you have uploaded and prepared your data.'}
+                <p className="font-medium text-yellow-800">No data available for visualization</p>
+                <p className="text-yellow-700">
+                  Sample data has been loaded for demonstration. Upload your own data to create real visualizations.
                 </p>
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleReturnToUpload} size="sm" variant="outline">
-                    Return to Upload
+                  <Button onClick={() => navigate('/upload')} size="sm">
+                    Upload Data
                   </Button>
-                  <Button onClick={handleReturnToOverview} size="sm" variant="outline">
-                    Return to Overview
+                  <Button onClick={() => navigate('/sample-data')} size="sm" variant="outline">
+                    Try Sample Data
                   </Button>
                 </div>
-                <details className="mt-2">
-                  <summary className="text-xs text-red-600 cursor-pointer">Debug Information</summary>
-                  <div className="mt-1 text-xs text-red-500 font-mono space-y-1">
-                    <div>Variables: {dataset?.variables?.length || 0}</div>
-                    <div>Rows: {dataset?.rows?.length || 0}</div>
-                    <div>Real data: {dataset?.isRealData ? 'Yes' : 'No'}</div>
-                    <div>Session ID: {dataset?.sessionId || 'None'}</div>
-                    <div>Error: {dataLoadError || 'No specific error'}</div>
-                  </div>
-                </details>
-              </div>
-            </AlertDescription>
-          </Alert>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const hasValidData = dataset.variables && 
-                      dataset.variables.length > 0 && 
-                      dataset.rows && 
-                      dataset.rows.length > 0;
-
-  if (!hasValidData) {
-    return (
-      <DashboardLayout>
-        <div className="p-6">
-          <Alert className="max-w-2xl mx-auto">
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              Dataset validation failed. Please check your data and try again.
-              <div className="mt-2 text-xs text-gray-500 font-mono">
-                <div>Variables available: {dataset?.variables?.length || 0}</div>
-                <div>Rows available: {dataset?.rows?.length || 0}</div>
               </div>
             </AlertDescription>
           </Alert>
@@ -179,10 +116,7 @@ const Visualization = () => {
             </p>
             <div className="text-xs text-gray-400 mt-2 font-mono">
               📊 Dataset: {dataset.rows.length} rows, {dataset.variables.length} variables
-              {dataset.sessionId && ` | Session: ${dataset.sessionId.slice(-8)}`}
               | {dataset.isRealData ? "Real Data" : "Sample Data"}
-              {dataset.prepChanges && Object.keys(dataset.prepChanges).length > 0 && 
-                ` | Prep steps: ${Object.keys(dataset.prepChanges).length}`}
             </div>
           </div>
 
