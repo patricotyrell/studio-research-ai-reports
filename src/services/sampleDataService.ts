@@ -7,6 +7,7 @@ export interface DataVariable {
   example: string;
   coding?: { [key: string]: number }; // For categorical variables
   originalCategories?: string[]; // Store original category labels
+  missingHandling?: 'drop' | 'mean' | 'median' | 'mode' | 'zero' | 'ignore'; // How to handle missing values
 }
 
 export interface DataRow {
