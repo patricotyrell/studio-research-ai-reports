@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getFullDatasetRows } from '@/utils/dataUtils';
+import { isDatasetLoaded, getDatasetRowCount } from '@/utils/datasetCache';
 
 const PaginatedDataPreview: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
@@ -15,26 +16,27 @@ const PaginatedDataPreview: React.FC = () => {
   
   const variables = getDatasetVariables();
   const fileInfo = getCurrentFile();
+  const totalRows = getDatasetRowCount();
   
   console.log('PaginatedDataPreview - Current state:', {
     variables: variables?.length,
     fileInfo: fileInfo?.name,
     currentPage,
     loading,
-    currentRowsCount: currentRows.length
+    currentRowsCount: currentRows.length,
+    isDatasetLoaded: isDatasetLoaded(),
+    totalRows
   });
   
   // Simplified data loading function
   const loadPageData = useCallback(async (page: number) => {
-    if (!variables || variables.length === 0 || !fileInfo) {
-      console.log('Skipping load - no variables or file info:', {
-        variablesLength: variables?.length || 0,
-        hasFileInfo: !!fileInfo
-      });
+    if (!isDatasetLoaded()) {
+      console.log('Dataset not loaded yet, skipping page load');
+      setError('Dataset not ready. Please wait or try refreshing.');
       return;
     }
     
-    console.log(`Starting to load page ${page} data...`);
+    console.log(`Loading page ${page} data...`);
     setLoading(true);
     setError(null);
     
@@ -58,18 +60,17 @@ const PaginatedDataPreview: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [variables, fileInfo, rowsPerPage]);
+  }, [rowsPerPage]);
   
   // Load data when component mounts or page changes
   useEffect(() => {
-    if (variables && variables.length > 0 && fileInfo) {
+    if (isDatasetLoaded()) {
       console.log(`Effect triggered: Loading data for page ${currentPage}`);
       loadPageData(currentPage);
     } else {
-      console.log('Effect triggered but missing data:', {
-        variablesLength: variables?.length || 0,
-        hasFileInfo: !!fileInfo
-      });
+      console.log('Effect triggered but dataset not loaded yet');
+      setCurrentRows([]);
+      setError('Waiting for dataset to load...');
     }
   }, [currentPage, loadPageData]);
   
@@ -89,14 +90,13 @@ const PaginatedDataPreview: React.FC = () => {
   }, [currentPage, loading]);
   
   const handleNext = useCallback(() => {
-    const totalRows = fileInfo?.rows || 0;
     const totalPages = Math.ceil(totalRows / rowsPerPage);
     
     if (currentPage < totalPages - 1 && !loading) {
       console.log('Going to next page');
       setCurrentPage(prev => prev + 1);
     }
-  }, [currentPage, fileInfo?.rows, loading, rowsPerPage]);
+  }, [currentPage, totalRows, loading, rowsPerPage]);
   
   // Early return for no data
   if (!fileInfo || !variables || variables.length === 0) {
@@ -113,7 +113,6 @@ const PaginatedDataPreview: React.FC = () => {
   }
   
   const columnNames = variables.map(v => v.name);
-  const totalRows = fileInfo.rows || 0;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
   const startIndex = currentPage * rowsPerPage;
   const endIndex = Math.min(startIndex + rowsPerPage, totalRows);

@@ -4,7 +4,7 @@ import { DataVariable } from '@/services/sampleDataService';
 
 export interface ExcelParseResult {
   variables: DataVariable[];
-  previewRows: any[];
+  previewRows: any[]; // This now contains ALL rows, not just preview
   totalRows: number;
   sheetNames: string[];
   selectedSheet: string;
@@ -91,6 +91,11 @@ export const parseExcelFile = async (file: File, sheetName?: string): Promise<Ex
           return;
         }
         
+        console.log('Excel parsing complete:', {
+          headers: headers.length,
+          totalRows: dataRows.length
+        });
+        
         // Analyze variables
         const variables: DataVariable[] = headers.map(header => {
           const values = dataRows.map(row => row[header]).filter(v => v !== null && v !== '');
@@ -131,12 +136,10 @@ export const parseExcelFile = async (file: File, sheetName?: string): Promise<Ex
           };
         });
         
-        // Get preview rows (first 5)
-        const previewRows = dataRows.slice(0, 5);
-        
+        // Return ALL rows in previewRows (renamed for compatibility)
         resolve({
           variables,
-          previewRows,
+          previewRows: dataRows, // This contains ALL rows now
           totalRows: dataRows.length,
           sheetNames: workbook.SheetNames,
           selectedSheet: selectedSheetName
