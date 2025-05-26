@@ -752,33 +752,34 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
     case 'fixDuplicates':
       console.log('Applying duplicate removal changes:', changes);
       
-      if (changes.duplicatesRemoved > 0) {
-        // Create a map to track unique rows
-        const uniqueRowsMap = new Map<string, any>();
-        const duplicateRowIndexes = new Set<number>();
+      if (changes.duplicatesRemoved > 0 && changes.exactDuplicatesOnly) {
+        // FIXED: Use a more precise duplicate detection that only removes 100% identical rows
+        const uniqueRowsMap = new Map<string, number>();
+        const rowsToKeep: any[] = [];
+        let duplicatesRemoved = 0;
         
-        // Identify duplicates by creating row signatures
+        // Create row signatures and identify duplicates
         updatedRows.forEach((row, index) => {
-          // Create a string representation of the row (excluding null/undefined values)
-          const rowKey = Object.keys(row)
-            .sort()
-            .map(key => `${key}:${row[key] || ''}`)
-            .join('|');
+          // Create a precise string representation including ALL fields and their exact values
+          const allKeys = Object.keys(row).sort();
+          const rowSignature = allKeys
+            .map(key => `${key}=${String(row[key] || 'NULL').trim()}`)
+            .join('||');
           
-          if (uniqueRowsMap.has(rowKey)) {
-            // This is a duplicate, mark for removal
-            duplicateRowIndexes.add(index);
-            console.log(`Marking duplicate row ${index} for removal`);
+          if (uniqueRowsMap.has(rowSignature)) {
+            // This is an exact duplicate, don't keep it
+            duplicatesRemoved++;
+            console.log(`Removing exact duplicate row ${index} with signature: ${rowSignature.substring(0, 100)}...`);
           } else {
-            // First occurrence, keep it
-            uniqueRowsMap.set(rowKey, row);
+            // First occurrence of this exact row signature, keep it
+            uniqueRowsMap.set(rowSignature, index);
+            rowsToKeep.push(row);
           }
         });
         
-        // Remove duplicate rows
-        updatedRows = updatedRows.filter((_, index) => !duplicateRowIndexes.has(index));
+        updatedRows = rowsToKeep;
         
-        console.log(`Removed ${duplicateRowIndexes.size} duplicate rows. Remaining: ${updatedRows.length}`);
+        console.log(`Removed ${duplicatesRemoved} exact duplicate rows. Remaining: ${updatedRows.length}`);
       }
       
       // Handle inconsistent values standardization
@@ -819,6 +820,8 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
     missing: v.missing, 
     invalidValues: v.invalidValues 
   })));
+  
+  console.log(`Updated rows count: ${updatedRows.length} (was ${currentRows.length})`);
   
   // Update the cache with the new state
   updateDatasetCache(updatedRows, updatedVars, stepType, changes);
