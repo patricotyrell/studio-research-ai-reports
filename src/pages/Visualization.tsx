@@ -44,18 +44,23 @@ const Visualization = () => {
       prepChanges: Object.keys(analysisDataset.prepChanges)
     });
     
-    // Verify dataset integrity - only proceed with real data
-    if (analysisDataset.rows.length === 0) {
-      console.error('🚨 CRITICAL: No rows found in visualization dataset!');
-    } else if (analysisDataset.rows.length < 1000 && datasetInfo.originalRows > 50000) {
-      console.error('🚨 CRITICAL: Dataset size mismatch in visualization:', {
-        currentRows: analysisDataset.rows.length,
-        originalRows: datasetInfo.originalRows
+    // FIXED: More permissive check - load if we have any data with variables and rows
+    const hasValidData = analysisDataset.variables && 
+                        analysisDataset.variables.length > 0 && 
+                        analysisDataset.rows && 
+                        analysisDataset.rows.length > 0;
+    
+    if (!hasValidData) {
+      console.error('🚨 CRITICAL: No valid dataset found for visualization!', {
+        hasVariables: !!(analysisDataset.variables && analysisDataset.variables.length > 0),
+        hasRows: !!(analysisDataset.rows && analysisDataset.rows.length > 0),
+        isRealData: analysisDataset.isRealData
       });
     } else {
-      console.log('✅ Dataset integrity check passed:', {
+      console.log('✅ Dataset validation passed:', {
         rowsAvailable: analysisDataset.rows.length,
-        variablesAvailable: analysisDataset.variables.length
+        variablesAvailable: analysisDataset.variables.length,
+        isRealData: analysisDataset.isRealData
       });
     }
     
@@ -89,7 +94,14 @@ const Visualization = () => {
     );
   }
 
-  if (!dataset || !dataset.variables || dataset.variables.length === 0 || !dataset.isRealData) {
+  // FIXED: Check for valid data more comprehensively
+  const hasValidData = dataset && 
+                      dataset.variables && 
+                      dataset.variables.length > 0 && 
+                      dataset.rows && 
+                      dataset.rows.length > 0;
+
+  if (!hasValidData) {
     return (
       <DashboardLayout>
         <div className="p-6">
@@ -97,6 +109,9 @@ const Visualization = () => {
             <Info className="h-4 w-4" />
             <AlertDescription>
               No dataset found. Please upload and prepare your data first before proceeding to visualization.
+              <div className="mt-2 text-xs text-gray-500">
+                Debug info: Variables: {dataset?.variables?.length || 0}, Rows: {dataset?.rows?.length || 0}, Real data: {dataset?.isRealData ? 'Yes' : 'No'}
+              </div>
             </AlertDescription>
           </Alert>
         </div>
@@ -123,7 +138,7 @@ const Visualization = () => {
               📊 Loaded: {dataset.rows.length} rows, {dataset.variables.length} variables
               | Session: {dataset.sessionId?.slice(-8) || 'N/A'}
               | {dataset.isRealData ? "Real Data" : "Sample Data"}
-              | Prep: {Object.keys(dataset.prepChanges).length} steps applied
+              | Prep: {Object.keys(dataset.prepChanges || {}).length} steps applied
             </div>
           </div>
 
