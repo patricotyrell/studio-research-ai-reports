@@ -1,3 +1,4 @@
+
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 
@@ -149,14 +150,27 @@ export const getCompletedSteps = () => {
   return JSON.parse(stepsData);
 };
 
-// Cache for loaded data chunks to avoid re-parsing
-const dataCache = new Map<string, any[]>();
-const loadingPromises = new Map<string, Promise<any[]>>();
-
-// Clear cache when file changes
-const clearCacheForFile = () => {
-  dataCache.clear();
-  loadingPromises.clear();
+// Helper function to properly parse CSV lines with quoted fields
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(field => field.replace(/^"|"$/g, ''));
 };
 
 // Enhanced process file data to handle both CSV and Excel files with memory optimization
@@ -169,19 +183,18 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
     throw new Error('Unsupported file format. Please upload a CSV or Excel file.');
   }
   
-  // Clear any existing cache
-  clearCacheForFile();
-  
   if (isExcel) {
     const result = await parseExcelFile(file, selectedSheet);
-    // Store file reference for chunked loading
-    const fileUrl = URL.createObjectURL(file);
-    sessionStorage.setItem('uploadedFileUrl', fileUrl);
-    sessionStorage.setItem('uploadedFileName', file.name);
-    sessionStorage.setItem('uploadedFileType', 'excel');
-    if (selectedSheet) {
-      sessionStorage.setItem('selectedSheet', selectedSheet);
-    }
+    
+    // Store the full processed data in localStorage for large datasets
+    const fullData = {
+      variables: result.variables,
+      allRows: result.previewRows, // This contains all parsed rows from Excel
+      totalRows: result.totalRows,
+      fileType: 'excel'
+    };
+    localStorage.setItem('fullDataset', JSON.stringify(fullData));
+    
     return result;
   }
   
@@ -189,7 +202,7 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   return processCSVDataOptimized(file);
 };
 
-// Optimized CSV processing that doesn't store all rows in memory
+// Optimized CSV processing that stores full data for chunked access
 export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -207,24 +220,40 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
         // Parse header
         const headers = parseCSVLine(lines[0]);
         
-        // Process only a sample of rows for analysis (first 1000 rows)
-        const sampleSize = Math.min(1000, lines.length - 1);
-        const sampleRows = [];
+        // For large files, process all data and store it
+        const allRows = [];
+        const totalDataLines = lines.length - 1;
         
-        for (let i = 1; i <= sampleSize; i++) {
-          const values = parseCSVLine(lines[i]);
-          const row: any = {};
-          headers.forEach((header, index) => {
-            const value = values[index] || null;
-            row[header] = value === '' ? null : value;
-          });
-          sampleRows.push(row);
+        // Process all rows for storage
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            allRows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i}:`, lineError);
+          }
         }
         
-        console.log('Processing CSV data optimized - sample rows:', sampleRows.length);
-        console.log('Total file rows:', lines.length - 1);
+        console.log('Processing CSV data - total rows:', allRows.length);
         
-        // Analyze variables based on sample
+        // Store the full dataset for chunked access
+        const fullData = {
+          variables: null, // Will be set below
+          allRows,
+          totalRows: allRows.length,
+          fileType: 'csv',
+          headers
+        };
+        
+        // Analyze variables based on sample (first 1000 rows)
+        const sampleSize = Math.min(1000, allRows.length);
+        const sampleRows = allRows.slice(0, sampleSize);
+        
         const variables: DataVariable[] = headers.map(header => {
           const values = sampleRows.map(row => row[header]).filter(v => v !== null && v !== '');
           const uniqueValues = [...new Set(values)];
@@ -261,19 +290,16 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
           };
         });
         
-        // Store the file for later access
-        const fileUrl = URL.createObjectURL(file);
-        sessionStorage.setItem('uploadedFileUrl', fileUrl);
-        sessionStorage.setItem('uploadedFileName', file.name);
-        sessionStorage.setItem('uploadedFileType', 'csv');
+        // Update fullData with variables
+        fullData.variables = variables;
+        localStorage.setItem('fullDataset', JSON.stringify(fullData));
         
-        const previewRows = sampleRows.slice(0, 5);
-        const totalRows = lines.length - 1;
+        const previewRows = allRows.slice(0, 5);
         
         resolve({
           variables,
           previewRows,
-          totalRows
+          totalRows: allRows.length
         });
       } catch (error) {
         console.error('Error processing CSV:', error);
@@ -284,29 +310,6 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsText(file);
   });
-};
-
-// Helper function to properly parse CSV lines with quoted fields
-const parseCSVLine = (line: string): string[] => {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result.map(field => field.replace(/^"|"$/g, ''));
 };
 
 // Get variables for the current dataset (real or sample)
@@ -361,119 +364,7 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
-// Enhanced function to load data chunks on demand with better caching and error handling
-export const loadDataChunk = async (startRow: number, rowCount: number): Promise<any[]> => {
-  const cacheKey = `${startRow}-${rowCount}`;
-  
-  // Check cache first
-  if (dataCache.has(cacheKey)) {
-    console.log(`Returning cached data for chunk ${cacheKey}`);
-    return dataCache.get(cacheKey)!;
-  }
-  
-  // Check if there's already a loading promise for this chunk
-  if (loadingPromises.has(cacheKey)) {
-    console.log(`Waiting for existing promise for chunk ${cacheKey}`);
-    return await loadingPromises.get(cacheKey)!;
-  }
-  
-  const fileUrl = sessionStorage.getItem('uploadedFileUrl');
-  const fileName = sessionStorage.getItem('uploadedFileName');
-  const fileType = sessionStorage.getItem('uploadedFileType');
-  
-  if (!fileUrl || !fileName) {
-    console.log('No file URL found, checking localStorage for processedData');
-    // Try to get data from localStorage as fallback
-    const processedData = localStorage.getItem('processedData');
-    if (processedData) {
-      const data = JSON.parse(processedData);
-      const allRows = data.previewRows || [];
-      const requestedRows = allRows.slice(startRow, startRow + rowCount);
-      console.log(`Returning ${requestedRows.length} rows from localStorage`);
-      return requestedRows;
-    }
-    return [];
-  }
-  
-  // Create and store the loading promise
-  const loadingPromise = (async () => {
-    try {
-      console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount} from ${fileType} file`);
-      
-      if (fileType === 'excel') {
-        // For Excel files, we need to handle differently
-        console.log('Excel chunked loading not fully implemented yet, using fallback');
-        const processedData = localStorage.getItem('processedData');
-        if (processedData) {
-          const data = JSON.parse(processedData);
-          const allRows = data.previewRows || [];
-          const requestedRows = allRows.slice(startRow, startRow + rowCount);
-          return requestedRows;
-        }
-        return [];
-      }
-      
-      // For CSV files
-      const response = await fetch(fileUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch file: ${response.status}`);
-      }
-      
-      const text = await response.text();
-      const lines = text.split('\n').filter(line => line.trim() !== '');
-      
-      if (lines.length < 2) {
-        console.log('File has insufficient data');
-        return [];
-      }
-      
-      const headers = parseCSVLine(lines[0]);
-      const dataLines = lines.slice(1);
-      
-      const startIndex = Math.max(0, startRow);
-      const endIndex = Math.min(dataLines.length, startRow + rowCount);
-      
-      console.log(`Processing CSV lines ${startIndex} to ${endIndex} of ${dataLines.length} total data lines`);
-      
-      const rows = [];
-      for (let i = startIndex; i < endIndex; i++) {
-        if (i < dataLines.length) {
-          try {
-            const values = parseCSVLine(dataLines[i]);
-            const row: any = {};
-            headers.forEach((header, index) => {
-              const value = values[index] || null;
-              row[header] = value === '' ? null : value;
-            });
-            rows.push(row);
-          } catch (lineError) {
-            console.warn(`Error parsing line ${i + 1}:`, lineError);
-            // Continue with other lines
-          }
-        }
-      }
-      
-      // Cache the result
-      dataCache.set(cacheKey, rows);
-      
-      console.log(`Successfully loaded chunk: rows ${startIndex} to ${endIndex}, count: ${rows.length}`);
-      return rows;
-    } catch (error) {
-      console.error('Error loading data chunk:', error);
-      throw error; // Re-throw to be handled by the calling function
-    } finally {
-      // Remove the promise from the map when done
-      loadingPromises.delete(cacheKey);
-    }
-  })();
-  
-  // Store the promise
-  loadingPromises.set(cacheKey, loadingPromise);
-  
-  return await loadingPromise;
-};
-
-// Updated function to get full dataset rows for pagination with better error handling
+// Simplified function to get full dataset rows for pagination
 export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) {
@@ -522,35 +413,39 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     }
   }
   
-  // For uploaded files, implement optimized chunked loading
+  // For uploaded files, use stored full dataset
   try {
-    const startRow = page * rowsPerPage;
-    console.log(`Attempting to load chunk: rows ${startRow} to ${startRow + rowsPerPage}`);
+    const fullDataset = localStorage.getItem('fullDataset');
+    if (fullDataset) {
+      const data = JSON.parse(fullDataset);
+      const allRows = data.allRows || [];
+      
+      console.log(`Loading from stored dataset: ${allRows.length} total rows`);
+      
+      const startIndex = page * rowsPerPage;
+      const endIndex = Math.min(startIndex + rowsPerPage, allRows.length);
+      const pageRows = allRows.slice(startIndex, endIndex);
+      
+      console.log(`Returning rows ${startIndex} to ${endIndex}: ${pageRows.length} rows`);
+      return pageRows;
+    }
     
-    const rows = await loadDataChunk(startRow, rowsPerPage);
+    // Final fallback to processedData
+    const processedData = localStorage.getItem('processedData');
+    if (processedData) {
+      const data = JSON.parse(processedData);
+      const allRows = data.previewRows || [];
+      const startIndex = page * rowsPerPage;
+      const fallbackRows = allRows.slice(startIndex, startIndex + rowsPerPage);
+      console.log(`Fallback returned ${fallbackRows.length} rows`);
+      return fallbackRows;
+    }
     
-    console.log(`Successfully loaded ${rows.length} rows for page ${page}`);
-    return rows;
+    console.log('No data source found');
+    return [];
     
   } catch (error) {
     console.error('Error in getFullDatasetRows:', error);
-    
-    // Try fallback to processedData in localStorage
-    console.log('Trying fallback to processedData');
-    const processedData = localStorage.getItem('processedData');
-    if (processedData) {
-      try {
-        const data = JSON.parse(processedData);
-        const allRows = data.previewRows || [];
-        const startIndex = page * rowsPerPage;
-        const fallbackRows = allRows.slice(startIndex, startIndex + rowsPerPage);
-        console.log(`Fallback returned ${fallbackRows.length} rows`);
-        return fallbackRows;
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
-      }
-    }
-    
     return [];
   }
 };
@@ -688,11 +583,4 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   savePreparedDataRows(updatedRows);
   
   return { variables: updatedVars, previewRows: updatedRows };
-};
-
-// Clear data cache when needed (export this for external use)
-export const clearDataCache = () => {
-  dataCache.clear();
-  loadingPromises.clear();
-  console.log('Data cache cleared');
 };

@@ -11,7 +11,6 @@ const PaginatedDataPreview: React.FC = () => {
   const [currentRows, setCurrentRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
   const rowsPerPage = 10;
   
   const variables = getDatasetVariables();
@@ -22,11 +21,10 @@ const PaginatedDataPreview: React.FC = () => {
     fileInfo: fileInfo?.name,
     currentPage,
     loading,
-    initialLoad,
     currentRowsCount: currentRows.length
   });
   
-  // Optimized data loading function with better error handling
+  // Simplified data loading function
   const loadPageData = useCallback(async (page: number) => {
     if (!variables || variables.length === 0 || !fileInfo) {
       console.log('Skipping load - no variables or file info');
@@ -41,7 +39,7 @@ const PaginatedDataPreview: React.FC = () => {
       
       const rows = await getFullDatasetRows(page, rowsPerPage);
       
-      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows', rows);
+      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows');
       
       if (rows.length === 0 && page === 0) {
         setError('No data found. Please check your file format and try again.');
@@ -54,32 +52,19 @@ const PaginatedDataPreview: React.FC = () => {
       console.error('Error loading page data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
       setError(`Loading failed: ${errorMessage}`);
-      
-      // Don't clear rows on error if we have some data
-      if (currentRows.length === 0) {
-        setCurrentRows([]);
-      }
+      setCurrentRows([]);
     } finally {
       setLoading(false);
-      setInitialLoad(false);
     }
-  }, [variables, fileInfo, currentRows.length]);
+  }, [variables, fileInfo]);
   
-  // Initial load effect - only runs once when component mounts with data
+  // Load data when component mounts or page changes
   useEffect(() => {
-    if (variables.length > 0 && fileInfo && initialLoad) {
-      console.log('Initial data load triggered');
-      loadPageData(0);
-    }
-  }, [variables.length, fileInfo, initialLoad, loadPageData]);
-  
-  // Page change effect - loads new data when page changes
-  useEffect(() => {
-    if (!initialLoad && variables.length > 0 && fileInfo) {
-      console.log(`Page changed to ${currentPage}, loading new data...`);
+    if (variables.length > 0 && fileInfo) {
+      console.log(`Loading data for page ${currentPage}`);
       loadPageData(currentPage);
     }
-  }, [currentPage, initialLoad, variables.length, fileInfo, loadPageData]);
+  }, [currentPage, variables.length, fileInfo, loadPageData]);
   
   // Retry function
   const handleRetry = useCallback(() => {
@@ -143,7 +128,7 @@ const PaginatedDataPreview: React.FC = () => {
           <div className="flex items-center justify-center h-32 p-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-research-700 mr-2"></div>
             <span className="text-gray-600 text-sm">
-              {initialLoad ? 'Loading preview...' : `Loading page ${currentPage + 1}...`}
+              Loading page {currentPage + 1}...
             </span>
           </div>
         ) : error ? (
