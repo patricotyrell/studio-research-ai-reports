@@ -149,7 +149,7 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
     return (
       <StepFlow
         title="Handle Missing Values"
-        description="No missing values or data quality issues found in your dataset."
+        description="Missing values can bias your results. Choose how to handle variables with missing data."
         onComplete={handleComplete}
         onBack={showBackButton ? onBack : undefined}
         showBackButton={showBackButton}
@@ -293,7 +293,7 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
     return (
       <StepFlow
         title="Handle Missing Values & Data Issues"
-        description="Select how to handle missing values and invalid entries for each variable."
+        description="Missing values can bias your results. Choose how to handle variables with missing data."
         onComplete={handleComplete}
         onCancel={() => setShowGuidance(true)}
         onBack={showBackButton ? onBack : undefined}
