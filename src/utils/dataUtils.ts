@@ -476,10 +476,14 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     }
   }
   
-  // Always get from cache - single source of truth
-  const rows = getCachedAllRows(page, rowsPerPage);
-  console.log(`Returning ${rows.length} rows from cache`);
-  return rows;
+  // Get all rows from cache, then slice for pagination
+  const allRows = getCachedAllRows();
+  const startIndex = page * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedRows = allRows.slice(startIndex, endIndex);
+  
+  console.log(`Returning ${paginatedRows.length} rows from cache (${startIndex}-${endIndex})`);
+  return paginatedRows;
 };
 
 // Save prepared variables data
