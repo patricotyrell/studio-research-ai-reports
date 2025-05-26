@@ -16,10 +16,12 @@ const PaginatedDataPreview: React.FC = () => {
   // Get all available rows for pagination
   const allRows = getFullDatasetRows();
   
-  console.log('PaginatedDataPreview - variables:', variables?.length);
-  console.log('PaginatedDataPreview - allRows:', allRows);
-  console.log('PaginatedDataPreview - allRows.length:', allRows?.length);
-  console.log('PaginatedDataPreview - fileInfo:', fileInfo);
+  console.log('PaginatedDataPreview - Debug Info:');
+  console.log('- variables count:', variables?.length);
+  console.log('- allRows count:', allRows?.length);
+  console.log('- fileInfo:', fileInfo);
+  console.log('- First row data:', allRows?.[0]);
+  console.log('- Variables:', variables?.map(v => ({ name: v.name, type: v.type, example: v.example })));
   
   if (!allRows || allRows.length === 0 || !variables || variables.length === 0) {
     return (
@@ -29,6 +31,9 @@ const PaginatedDataPreview: React.FC = () => {
         </CardHeader>
         <CardContent className="p-6">
           <p className="text-gray-500">No data available for preview.</p>
+          <p className="text-xs text-gray-400 mt-2">
+            Debug: Variables: {variables?.length || 0}, Rows: {allRows?.length || 0}
+          </p>
         </CardContent>
       </Card>
     );
@@ -40,22 +45,32 @@ const PaginatedDataPreview: React.FC = () => {
   const endIndex = startIndex + rowsPerPage;
   const currentRows = allRows.slice(startIndex, endIndex);
   
-  console.log('PaginatedDataPreview - totalPages:', totalPages);
-  console.log('PaginatedDataPreview - currentPage:', currentPage);
-  console.log('PaginatedDataPreview - currentRows.length:', currentRows.length);
-  console.log('PaginatedDataPreview - startIndex:', startIndex, 'endIndex:', endIndex);
+  console.log('PaginatedDataPreview - Pagination Info:');
+  console.log('- totalPages:', totalPages);
+  console.log('- currentPage:', currentPage);
+  console.log('- currentRows.length:', currentRows.length);
+  console.log('- startIndex:', startIndex, 'endIndex:', endIndex);
+  console.log('- Current page data sample:', currentRows?.[0]);
   
   const handlePrevious = () => {
     console.log('Previous button clicked, current page:', currentPage);
     if (currentPage > 0) {
-      setCurrentPage(prev => prev - 1);
+      setCurrentPage(prev => {
+        const newPage = prev - 1;
+        console.log('Moving to page:', newPage);
+        return newPage;
+      });
     }
   };
   
   const handleNext = () => {
     console.log('Next button clicked, current page:', currentPage, 'total pages:', totalPages);
     if (currentPage < totalPages - 1) {
-      setCurrentPage(prev => prev + 1);
+      setCurrentPage(prev => {
+        const newPage = prev + 1;
+        console.log('Moving to page:', newPage);
+        return newPage;
+      });
     }
   };
   
@@ -80,19 +95,29 @@ const PaginatedDataPreview: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentRows.map((row, rowIndex) => (
-                <TableRow key={startIndex + rowIndex}>
-                  {columnNames.map((column) => (
-                    <TableCell key={`${startIndex + rowIndex}-${column}`} className="py-2 whitespace-nowrap">
-                      {row[column] === null || row[column] === undefined || row[column] === '' ? (
-                        <span className="text-gray-300 italic">null</span>
-                      ) : (
-                        String(row[column])
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
+              {currentRows.map((row, rowIndex) => {
+                const actualRowIndex = startIndex + rowIndex;
+                console.log(`Rendering row ${actualRowIndex}:`, row);
+                
+                return (
+                  <TableRow key={actualRowIndex}>
+                    {columnNames.map((column) => {
+                      const cellValue = row[column];
+                      console.log(`Cell [${actualRowIndex}][${column}]:`, cellValue, typeof cellValue);
+                      
+                      return (
+                        <TableCell key={`${actualRowIndex}-${column}`} className="py-2 whitespace-nowrap">
+                          {cellValue === null || cellValue === undefined || cellValue === '' ? (
+                            <span className="text-gray-300 italic">null</span>
+                          ) : (
+                            String(cellValue)
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

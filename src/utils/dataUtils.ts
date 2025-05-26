@@ -150,7 +150,7 @@ export const getCompletedSteps = () => {
 };
 
 // Enhanced process file data to handle both CSV and Excel files
-export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number, allRows?: any[] }> => {
   const fileName = file.name.toLowerCase();
   const isCSV = fileName.endsWith('.csv');
   const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
@@ -164,7 +164,8 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
     return {
       variables: result.variables,
       previewRows: result.previewRows,
-      totalRows: result.totalRows
+      totalRows: result.totalRows,
+      allRows: result.previewRows // For now, Excel parsing returns limited rows
     };
   }
   
@@ -173,7 +174,7 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
 };
 
 // Process CSV data to extract variables and preview rows
-export const processCSVData = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+export const processCSVData = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number, allRows?: any[] }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -190,15 +191,20 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
         // Parse header
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         
-        // Parse data rows
+        // Parse ALL data rows (not just preview)
         const dataRows = lines.slice(1).map(line => {
           const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
           const row: any = {};
           headers.forEach((header, index) => {
-            row[header] = values[index] || null;
+            const value = values[index] || null;
+            // Convert empty strings to null
+            row[header] = value === '' ? null : value;
           });
           return row;
         });
+        
+        console.log('Processed CSV data - total rows:', dataRows.length);
+        console.log('First few rows:', dataRows.slice(0, 3));
         
         // Analyze variables
         const variables: DataVariable[] = headers.map(header => {
@@ -240,13 +246,14 @@ export const processCSVData = async (file: File): Promise<{ variables: DataVaria
           };
         });
         
-        // Get preview rows (first 5)
+        // Get preview rows (first 5) and store all rows
         const previewRows = dataRows.slice(0, 5);
         
         resolve({
           variables,
           previewRows,
-          totalRows: dataRows.length
+          totalRows: dataRows.length,
+          allRows: dataRows // Store all rows for pagination
         });
       } catch (error) {
         reject(error);
@@ -310,14 +317,18 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
-// Get full dataset rows for pagination (new function)
+// Updated function to get full dataset rows for pagination
 export const getFullDatasetRows = () => {
   const fileInfo = getCurrentFile();
-  if (!fileInfo) return [];
+  if (!fileInfo) {
+    console.log('getFullDatasetRows: No file info found');
+    return [];
+  }
   
   // First try to get prepared data rows (post data-prep)
   const preparedData = getPreparedDataRows();
   if (preparedData && preparedData.length > 0) {
+    console.log('getFullDatasetRows: Using prepared data, rows:', preparedData.length);
     return preparedData;
   }
   
@@ -344,44 +355,37 @@ export const getFullDatasetRows = () => {
         
         extendedRows.push(modifiedRow);
       }
+      console.log('getFullDatasetRows: Using sample data, generated rows:', extendedRows.length);
       return extendedRows;
     }
     return baseRows;
   }
   
-  // For real uploaded files, we need to generate or simulate full dataset
-  // Since we only store preview rows, we'll simulate a larger dataset based on the file info
+  // For real uploaded files, get from processed data
   const processedData = localStorage.getItem('processedData');
   if (processedData) {
     const data = JSON.parse(processedData);
-    const previewRows = data.previewRows || [];
+    console.log('getFullDatasetRows: Processing uploaded file data');
+    console.log('getFullDatasetRows: processedData keys:', Object.keys(data));
     
-    if (previewRows.length > 0 && fileInfo.rows && fileInfo.rows > previewRows.length) {
-      // Generate additional rows by cycling through the preview data with variations
-      const extendedRows = [];
-      for (let i = 0; i < Math.min(fileInfo.rows, 1000); i++) { // Limit to 1000 for performance
-        const baseRow = previewRows[i % previewRows.length];
-        const modifiedRow = { ...baseRow };
-        
-        // Add row variation to simulate real data
-        Object.keys(modifiedRow).forEach(key => {
-          if (modifiedRow[key] && typeof modifiedRow[key] === 'string' && !modifiedRow[key].includes('null')) {
-            // Add variation to numeric-looking fields
-            if (!isNaN(Number(modifiedRow[key]))) {
-              const baseNum = Number(modifiedRow[key]);
-              modifiedRow[key] = String(baseNum + Math.floor(Math.random() * 10));
-            }
-          }
-        });
-        
-        extendedRows.push(modifiedRow);
-      }
-      return extendedRows;
+    // Check if we have stored all rows from the original processing
+    if (data.allRows && data.allRows.length > 0) {
+      console.log('getFullDatasetRows: Found allRows in processed data, count:', data.allRows.length);
+      return data.allRows;
     }
     
-    return previewRows;
+    // Fallback to preview rows if allRows not available
+    const previewRows = data.previewRows || [];
+    console.log('getFullDatasetRows: Using preview rows as fallback, count:', previewRows.length);
+    
+    if (previewRows.length > 0) {
+      // Since we only have preview rows, just return them for now
+      // In a real scenario, we'd need to re-process the file to get all rows
+      return previewRows;
+    }
   }
   
+  console.log('getFullDatasetRows: No data found, returning empty array');
   return [];
 };
 
