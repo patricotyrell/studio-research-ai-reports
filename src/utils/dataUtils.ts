@@ -2,13 +2,17 @@ import { sampleDatasets, getSampleDataset, DataVariable } from '../services/samp
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 import { 
   setDatasetCache, 
+  updateDatasetCache,
   getDatasetVariables as getCachedVariables,
   getDatasetRows as getCachedRows,
   getDatasetPreviewRows as getCachedPreviewRows,
+  getAllDatasetRows as getCachedAllRows,
   getDatasetRowCount,
   getDatasetMetadata,
+  getPrepChanges,
   isDatasetLoaded,
   clearDatasetCache,
+  restoreDatasetState,
   initializeSampleDataCache
 } from './datasetCache';
 
@@ -473,7 +477,7 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
   }
   
   // Always get from cache - single source of truth
-  const rows = getCachedRows(page, rowsPerPage);
+  const rows = getCachedAllRows(page, rowsPerPage);
   console.log(`Returning ${rows.length} rows from cache`);
   return rows;
 };
@@ -506,15 +510,44 @@ export const getPreparedDataRows = () => {
 
 // Get the most recent dataset state (for visualization and analysis)
 export const getCurrentDatasetState = () => {
-  const variables = getDatasetVariables();
-  const previewRows = getDatasetPreviewRows();
+  // Try to restore state from localStorage first
+  restoreDatasetState();
+  
+  const variables = getCachedVariables();
+  const previewRows = getCachedPreviewRows();
   const completedSteps = getCompletedSteps();
+  const prepChanges = getPrepChanges();
   
   return {
     variables,
     previewRows,
     completedSteps,
-    hasBeenPrepared: Object.values(completedSteps).some(step => step === true)
+    prepChanges,
+    hasBeenPrepared: Object.keys(prepChanges).length > 0
+  };
+};
+
+// Ensure data consistency when navigating to visualization/analysis
+export const getDatasetForAnalysis = () => {
+  console.log('Getting dataset for analysis...');
+  
+  // Always use the current state from cache (which includes all prep changes)
+  const variables = getCachedVariables();
+  const allRows = getCachedAllRows();
+  const metadata = getDatasetMetadata();
+  const prepChanges = getPrepChanges();
+  
+  console.log('Dataset for analysis:', {
+    variables: variables.length,
+    rows: allRows.length,
+    prepChanges: Object.keys(prepChanges)
+  });
+  
+  return {
+    variables,
+    rows: allRows,
+    metadata,
+    prepChanges
   };
 };
 
@@ -524,16 +557,17 @@ export const hasDatasetBeenModified = () => {
   return Object.values(completedSteps).some(step => step === true);
 };
 
-// Apply data preparation changes (simulated for demo)
+// Apply data preparation changes with improved flow
 export const applyDataPrepChanges = (stepType: string, changes: any) => {
-  const currentVars = getDatasetVariables();
-  const currentRows = getDatasetPreviewRows();
+  console.log(`Applying data prep changes for ${stepType}:`, changes);
   
-  // Simulate applying changes based on step type
+  // Get current state from cache
+  const currentVars = getCachedVariables();
+  const currentRows = getCachedAllRows();
+  
+  // Apply changes based on step type
   let updatedVars = [...currentVars];
   let updatedRows = [...currentRows];
-  
-  console.log(`Applying data prep changes for ${stepType}:`, changes);
   
   switch (stepType) {
     case 'missingValues':
@@ -547,7 +581,6 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
           console.log(`Handling invalid values for ${v.name} with strategy: ${handling}`);
           
           if (handling === 'null') {
-            // Convert invalid values to null - this increases missing count but cleans the column
             updatedVar = { 
               ...v, 
               missing: (v.missing || 0) + (v.invalidValues?.length || 0), 
@@ -555,28 +588,24 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
               numericPercentage: undefined 
             };
           } else if (handling === 'zero') {
-            // Convert invalid values to zero - removes invalid values
             updatedVar = { 
               ...v, 
               invalidValues: undefined,
               numericPercentage: undefined 
             };
           } else if (handling === 'mean') {
-            // Convert invalid values to mean - removes invalid values
             updatedVar = { 
               ...v, 
               invalidValues: undefined,
               numericPercentage: undefined 
             };
           }
-          // 'ignore' leaves the variable as-is
         }
         
         // Handle regular missing values
         if (changes.missingValueHandling && changes.missingValueHandling[v.name]) {
           const missingHandling = changes.missingValueHandling[v.name];
           if (missingHandling !== 'ignore') {
-            // Mark missing values as handled (set to 0 for demo)
             updatedVar = { ...updatedVar, missing: 0, missingHandling };
           }
         }
@@ -584,7 +613,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
         return updatedVar;
       });
       
-      // Update row data to reflect the changes (simplified for demo)
+      // Update row data to reflect the changes
       updatedRows = updatedRows.map(row => {
         const newRow = { ...row };
         
@@ -600,8 +629,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
                 } else if (handling === 'zero') {
                   newRow[colName] = 0;
                 } else if (handling === 'mean') {
-                  // Simplified: use a default value for demo
-                  newRow[colName] = 5;
+                  newRow[colName] = 5; // Simplified for demo
                 }
               }
             }
@@ -612,8 +640,60 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       });
       break;
       
+    case 'standardizeVariables':
+      console.log('Applying variable standardization:', changes);
+      if (changes.standardizedNames) {
+        // First update variables
+        changes.standardizedNames.forEach((change: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
+          if (varIndex >= 0) {
+            console.log(`Updating variable name from "${change.oldName}" to "${change.newName}"`);
+            updatedVars[varIndex] = {
+              ...updatedVars[varIndex],
+              name: change.newName
+            };
+          }
+        });
+        
+        // Then update row data keys to match new variable names
+        updatedRows = updatedRows.map(row => {
+          let newRow = { ...row };
+          changes.standardizedNames.forEach((change: any) => {
+            if (newRow.hasOwnProperty(change.oldName)) {
+              newRow[change.newName] = newRow[change.oldName];
+              delete newRow[change.oldName];
+            }
+          });
+          return newRow;
+        });
+        
+        // Also handle categorical values standardization
+        if (changes.standardizedValues) {
+          Object.entries(changes.standardizedValues).forEach(([varName, valueChanges]: [string, any]) => {
+            const variable = updatedVars.find(v => v.name === varName);
+            if (variable && variable.type === 'categorical') {
+              // Update variable coding
+              const newCoding: {[key: string]: number} = {};
+              Object.entries(valueChanges).forEach(([oldValue, newValue]: [string, any], index) => {
+                newCoding[newValue] = index;
+              });
+              variable.coding = newCoding;
+              variable.originalCategories = Object.keys(newCoding);
+              
+              // Update row data
+              updatedRows = updatedRows.map(row => {
+                if (row[varName] && valueChanges[row[varName]]) {
+                  return { ...row, [varName]: valueChanges[row[varName]] };
+                }
+                return row;
+              });
+            }
+          });
+        }
+      }
+      break;
+      
     case 'recodeVariables':
-      // Update variable types and names if recoded, but preserve original categories
       if (changes.recodedVariables) {
         changes.recodedVariables.forEach((recode: any) => {
           const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
@@ -623,7 +703,6 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
               ...originalVar,
               name: recode.newName || recode.originalName,
               type: recode.newType || originalVar.type,
-              // Preserve original categories and update coding if provided
               coding: recode.newCoding || originalVar.coding,
               originalCategories: originalVar.originalCategories || originalVar.coding ? Object.keys(originalVar.coding) : undefined
             };
@@ -633,7 +712,6 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'removeColumns':
-      // Remove specified columns
       if (changes.removedColumns) {
         updatedVars = updatedVars.filter(v => !changes.removedColumns.includes(v.name));
         updatedRows = updatedRows.map(row => {
@@ -646,40 +724,51 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       }
       break;
       
-    case 'standardizeVariables':
-      // Update variable names if standardized
-      console.log('Applying variable standardization:', changes);
-      if (changes.standardizedNames) {
-        changes.standardizedNames.forEach((change: any) => {
-          const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
-          if (varIndex >= 0) {
-            console.log(`Updating variable name from "${change.oldName}" to "${change.newName}"`);
-            updatedVars[varIndex] = {
-              ...updatedVars[varIndex],
-              name: change.newName
-            };
-            
-            // Also update the row data keys
-            updatedRows = updatedRows.map(row => {
-              if (row.hasOwnProperty(change.oldName)) {
-                const newRow = { ...row };
-                newRow[change.newName] = newRow[change.oldName];
-                delete newRow[change.oldName];
-                return newRow;
-              }
-              return row;
-            });
-          }
+    case 'compositeScores':
+      if (changes.compositeVariables) {
+        // Add new composite variables
+        changes.compositeVariables.forEach((composite: any) => {
+          updatedVars.push({
+            name: composite.name,
+            type: 'numeric',
+            missing: 0,
+            unique: composite.uniqueValues || 10,
+            example: composite.exampleValue || '5.0'
+          });
+          
+          // Add composite scores to rows (simplified calculation)
+          updatedRows = updatedRows.map(row => ({
+            ...row,
+            [composite.name]: composite.exampleValue || Math.round(Math.random() * 10)
+          }));
         });
+      }
+      break;
+      
+    case 'fixDuplicates':
+      if (changes.duplicatesRemoved > 0) {
+        // Remove duplicate rows (simplified for demo)
+        const uniqueRows = updatedRows.filter((row, index, arr) => 
+          index === arr.findIndex(r => JSON.stringify(r) === JSON.stringify(row))
+        );
+        updatedRows = uniqueRows;
       }
       break;
   }
   
-  console.log('Updated variables after data prep:', updatedVars.map(v => ({ name: v.name, type: v.type, missing: v.missing, invalidValues: v.invalidValues })));
+  console.log('Updated variables after data prep:', updatedVars.map(v => ({ 
+    name: v.name, 
+    type: v.type, 
+    missing: v.missing, 
+    invalidValues: v.invalidValues 
+  })));
   
-  // Save the updated state
+  // Update the cache with the new state
+  updateDatasetCache(updatedRows, updatedVars, stepType, changes);
+  
+  // Also save to localStorage for persistence
   savePreparedVariables(updatedVars);
   savePreparedDataRows(updatedRows);
   
-  return { variables: updatedVars, previewRows: updatedRows };
+  return { variables: updatedVars, previewRows: updatedRows.slice(0, 5) };
 };

@@ -14,7 +14,7 @@ import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
 import RemoveColumnsStep from '@/components/data-prep/RemoveColumnsStep';
 import DuplicatesStep from '@/components/data-prep/DuplicatesStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
-import { saveStepCompletion, getCompletedSteps, applyDataPrepChanges } from '@/utils/dataUtils';
+import { saveStepCompletion, getCompletedSteps, applyDataPrepChanges, getCurrentDatasetState } from '@/utils/dataUtils';
 
 const TOTAL_STEPS = 6;
 
@@ -37,6 +37,12 @@ const DataPreparation = () => {
     if (!currentFile) {
       navigate('/upload');
       return;
+    }
+    
+    // Load current dataset state to restore any existing changes
+    const currentState = getCurrentDatasetState();
+    if (currentState.prepChanges) {
+      setStepChanges(currentState.prepChanges);
     }
   }, [navigate]);
 
@@ -103,6 +109,10 @@ const DataPreparation = () => {
   const handleFinish = () => {
     setLoading(true);
     
+    // Ensure all changes are properly saved before navigating
+    const finalState = getCurrentDatasetState();
+    console.log('Final dataset state before navigation:', finalState);
+    
     setTimeout(() => {
       setLoading(false);
       navigate('/visualization');
@@ -110,7 +120,7 @@ const DataPreparation = () => {
   };
   
   const renderCurrentStep = () => {
-    // Updated step order: standardizeVariables moved before recodeVariables
+    // Reordered step names: standardizeVariables moved before recodeVariables
     const stepNames = ['missingValues', 'standardizeVariables', 'recodeVariables', 'compositeScores', 'removeColumns', 'fixDuplicates'];
     
     const commonProps = {
