@@ -1,3 +1,4 @@
+
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 import { 
@@ -181,25 +182,35 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
       previewRows: excelResult.previewRows,
       totalRows: excelResult.totalRows
     };
-  } else {
-    result = await processCSVDataOptimized(file);
-  }
-  
-  // Store complete dataset in unified cache
-  const metadata = {
-    fileName: file.name,
-    totalRows: result.totalRows,
-    totalColumns: result.variables.length,
-    uploadedAt: new Date().toISOString()
-  };
-  
-  // For CSV, we need to get all rows, not just preview
-  if (isCSV) {
-    const allRows = await getAllCSVRows(file);
-    setDatasetCache(allRows, result.variables, metadata);
-  } else {
+    
     // For Excel, parseExcelFile already returns all rows in previewRows
-    setDatasetCache(excelResult.previewRows, result.variables, metadata);
+    const metadata = {
+      fileName: file.name,
+      totalRows: excelResult.totalRows,
+      totalColumns: excelResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(excelResult.previewRows, excelResult.variables, metadata);
+  } else {
+    // For CSV, get all rows and store in cache
+    const allRows = await getAllCSVRows(file);
+    const csvResult = await processCSVDataOptimized(file);
+    
+    const metadata = {
+      fileName: file.name,
+      totalRows: allRows.length,
+      totalColumns: csvResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(allRows, csvResult.variables, metadata);
+    
+    result = {
+      variables: csvResult.variables,
+      previewRows: allRows.slice(0, 5),
+      totalRows: allRows.length
+    };
   }
   
   console.log('Dataset cached successfully:', {
@@ -262,7 +273,7 @@ const parseCSVLine = (line: string): string[] => {
   let current = '';
   let inQuotes = false;
   
-  for (let i = 0; < line.length; i++) {
+  for (let i = 0; i < line.length; i++) {
     const char = line[i];
     
     if (char === '"') {
