@@ -415,7 +415,7 @@ const MissingValuesStep: React.FC<MissingValuesStepProps> = ({
                 <li>• <strong>Mixed numeric columns:</strong> Convert invalid values to null (recommended) to maintain numeric type</li>
                 <li>• <strong>Missing values in numeric variables:</strong> Replace with mean or median</li>
                 <li>• <strong>Missing values in categorical variables:</strong> Replace with most frequent value</li>
-                <li>• <strong>High missing percentage (>50%):</strong> Consider dropping those rows</li>
+                <li>• <strong>High missing percentage ({">"}50%):</strong> Consider dropping those rows</li>
               </ul>
             </div>
           </div>
