@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StepIndicator from '@/components/StepIndicator';
@@ -29,33 +28,51 @@ const Visualization = () => {
 
   useEffect(() => {
     console.log('🎨 VISUALIZATION MODULE - Component mounted, loading data');
+    console.log('🎨 VISUALIZATION MODULE - Current URL:', window.location.href);
     
-    try {
-      const analysisDataset = getDatasetForAnalysis();
-      
-      if (!analysisDataset) {
-        console.error('❌ VISUALIZATION MODULE - No dataset available');
-        setDataError('NO_DATASET');
-        setDataset(null);
-      } else {
-        console.log('✅ VISUALIZATION MODULE - Dataset successfully loaded:', {
-          source: analysisDataset.source || 'Unknown',
-          variables: analysisDataset.variables?.length || 0,
-          rows: analysisDataset.rows?.length || 0,
-          isRealData: analysisDataset.isRealData,
-          fileName: analysisDataset.metadata?.fileName
+    // Add a small delay to ensure any previous data operations are complete
+    const loadData = async () => {
+      try {
+        // Force a small delay to ensure data stability
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const analysisDataset = getDatasetForAnalysis();
+        
+        console.log('🎨 VISUALIZATION MODULE - Dataset retrieval result:', {
+          hasDataset: !!analysisDataset,
+          source: analysisDataset?.source || 'None',
+          variables: analysisDataset?.variables?.length || 0,
+          rows: analysisDataset?.rows?.length || 0,
+          isRealData: analysisDataset?.isRealData,
+          fileName: analysisDataset?.metadata?.fileName
         });
         
-        setDataset(analysisDataset);
-        setDataError(null);
+        if (!analysisDataset) {
+          console.error('❌ VISUALIZATION MODULE - No dataset returned from getDatasetForAnalysis');
+          setDataError('NO_DATASET');
+          setDataset(null);
+        } else {
+          console.log('✅ VISUALIZATION MODULE - Dataset successfully loaded:', {
+            source: analysisDataset.source || 'Unknown',
+            variables: analysisDataset.variables?.length || 0,
+            rows: analysisDataset.rows?.length || 0,
+            isRealData: analysisDataset.isRealData,
+            fileName: analysisDataset.metadata?.fileName
+          });
+          
+          setDataset(analysisDataset);
+          setDataError(null);
+        }
+      } catch (error) {
+        console.error('❌ VISUALIZATION MODULE - Error loading dataset:', error);
+        setDataError('LOAD_ERROR');
+        setDataset(null);
       }
-    } catch (error) {
-      console.error('❌ VISUALIZATION MODULE - Error loading dataset:', error);
-      setDataError('LOAD_ERROR');
-      setDataset(null);
-    }
+      
+      setLoading(false);
+    };
     
-    setLoading(false);
+    loadData();
   }, []);
 
   const handleVariableSelect = (variables: string[]) => {
@@ -85,7 +102,7 @@ const Visualization = () => {
     );
   }
 
-  // CRITICAL: Handle no dataset case with clear user guidance
+  // Show error state if no dataset found
   if (dataError === 'NO_DATASET' || !dataset) {
     return (
       <DashboardLayout>
@@ -103,7 +120,7 @@ const Visualization = () => {
                   <div>
                     <p className="font-medium text-red-800 mb-2">No Dataset Found</p>
                     <p className="text-red-700">
-                      We couldn't find any uploaded dataset to visualize. This could happen if:
+                      We couldn't find any dataset to visualize. This could happen if:
                     </p>
                     <ul className="list-disc list-inside text-red-700 mt-2 space-y-1">
                       <li>No data file has been uploaded yet</li>
@@ -121,14 +138,6 @@ const Visualization = () => {
                       Upload Data
                     </Button>
                     <Button 
-                      onClick={() => navigate('/data-preparation')} 
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      Back to Data Prep
-                    </Button>
-                    <Button 
                       onClick={() => navigate('/sample-data')} 
                       variant="outline"
                     >
@@ -144,8 +153,8 @@ const Visualization = () => {
     );
   }
 
-  // Validate dataset structure
-  if (!dataset.variables || dataset.variables.length === 0 || !dataset.rows || dataset.rows.length === 0) {
+  // Validate dataset structure - be more lenient
+  if (!dataset.variables || dataset.variables.length === 0) {
     return (
       <DashboardLayout>
         <div className="p-6">
@@ -159,15 +168,10 @@ const Visualization = () => {
               <Info className="h-4 w-4 text-yellow-600" />
               <AlertDescription>
                 <div className="space-y-3">
-                  <p className="font-medium text-yellow-800">Invalid Dataset Structure</p>
+                  <p className="font-medium text-yellow-800">Dataset Structure Issue</p>
                   <p className="text-yellow-700">
-                    The dataset exists but has structural issues:
+                    The dataset has no variables to visualize.
                   </p>
-                  <ul className="list-disc list-inside text-yellow-700 space-y-1">
-                    <li>Variables: {dataset.variables?.length || 0}</li>
-                    <li>Rows: {dataset.rows?.length || 0}</li>
-                    <li>Source: {dataset.metadata?.fileName || 'Unknown'}</li>
-                  </ul>
                   <div className="flex gap-2 pt-2">
                     <Button onClick={() => navigate('/data-preparation')} size="sm">
                       Return to Data Prep
@@ -200,7 +204,7 @@ const Visualization = () => {
               Create insightful visualizations to explore patterns and relationships in your data.
             </p>
             <div className="text-xs text-gray-400 mt-2 font-mono bg-gray-100 p-2 rounded">
-              📊 Dataset: {dataset.rows.length} rows, {dataset.variables.length} variables
+              📊 Dataset: {dataset.rows?.length || 0} rows, {dataset.variables?.length || 0} variables
               | Source: {dataset.metadata?.fileName || 'Unknown'}
               | Type: {dataset.isRealData ? "🔴 Real Data" : "🟡 Sample Data"}
               | Session: {dataset.sessionId?.slice(-8) || 'N/A'}
@@ -221,7 +225,7 @@ const Visualization = () => {
                   />
                   
                   <VariableSelector
-                    variables={dataset.variables}
+                    variables={dataset.variables || []}
                     selectedVariables={selectedVariables}
                     onVariableSelect={handleVariableSelect}
                     mode={explorationMode}
@@ -229,7 +233,7 @@ const Visualization = () => {
                   
                   <ChartTypeSelector
                     selectedVariables={selectedVariables}
-                    variables={dataset.variables}
+                    variables={dataset.variables || []}
                     onChartTypeSelect={handleChartTypeSelect}
                     mode={explorationMode}
                   />
@@ -237,7 +241,7 @@ const Visualization = () => {
                   <ChartValidationAlert
                     selectedVariables={selectedVariables}
                     chartType={chartType}
-                    variables={dataset.variables}
+                    variables={dataset.variables || []}
                     onValidationChange={handleValidationChange}
                   />
                 </CardContent>
@@ -252,8 +256,8 @@ const Visualization = () => {
                 </CardHeader>
                 <CardContent>
                   <ChartRenderer
-                    data={dataset.rows}
-                    variables={dataset.variables}
+                    data={dataset.rows || []}
+                    variables={dataset.variables || []}
                     selectedVariables={selectedVariables}
                     chartType={chartType}
                     isValid={isValidConfiguration}
@@ -263,8 +267,8 @@ const Visualization = () => {
 
               {isValidConfiguration && (
                 <InsightsPanel
-                  data={dataset.rows}
-                  variables={dataset.variables}
+                  data={dataset.rows || []}
+                  variables={dataset.variables || []}
                   selectedVariables={selectedVariables}
                   chartType={chartType}
                 />
