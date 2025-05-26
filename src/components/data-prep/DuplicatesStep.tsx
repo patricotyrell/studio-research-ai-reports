@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
-import { getDatasetRows, getDatasetRowCount } from '@/utils/datasetCache';
+import { getAllDatasetRows } from '@/utils/datasetCache';
 
 interface DuplicatesStepProps {
   onComplete: (autoApplied: boolean, changes?: any) => void;
@@ -61,18 +61,8 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
       setAnalyzing(true);
       
       try {
-        // Get all data from the dataset
-        const totalRows = getDatasetRowCount();
-        const pageSize = 100;
-        const totalPages = Math.ceil(totalRows / pageSize);
-        
-        let allRows: any[] = [];
-        
-        // Fetch all data in chunks
-        for (let page = 0; page < totalPages; page++) {
-          const pageRows = getDatasetRows(page, pageSize);
-          allRows = [...allRows, ...pageRows];
-        }
+        // Get all rows from cache without modifying anything
+        const allRows = getAllDatasetRows();
         
         console.log(`Analyzing ${allRows.length} rows for duplicates and inconsistencies`);
         
@@ -81,7 +71,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
           return;
         }
         
-        // Detect duplicates - FIXED: Only check for exact row matches across ALL fields
+        // FIXED: Use a much more careful duplicate detection
         const duplicates = findExactDuplicateRows(allRows);
         console.log(`Found ${duplicates.length} exact duplicate groups`);
         
@@ -102,50 +92,64 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     analyzeData();
   }, []);
 
-  // FIXED: Function to find only exact duplicate rows (all fields identical)
+  // FIXED: Much more careful duplicate detection - only exact matches across ALL fields
   const findExactDuplicateRows = (rows: any[]): DuplicateGroup[] => {
+    console.log('Starting duplicate detection on', rows.length, 'rows');
+    
     const rowGroups = new Map<string, number[]>();
     
     rows.forEach((row, index) => {
-      // Create a string representation including ALL fields and their values
-      // Only rows that are 100% identical across all fields should be considered duplicates
-      const allKeys = Object.keys(row).sort();
-      const rowKey = allKeys
-        .map(key => `${key}=${String(row[key] || 'NULL').trim()}`)
-        .join('||');
+      // Create a normalized string for the entire row
+      // Sort keys to ensure consistent comparison
+      const sortedKeys = Object.keys(row).sort();
       
-      if (!rowGroups.has(rowKey)) {
-        rowGroups.set(rowKey, []);
+      // Create row signature with all field values
+      const rowValues = sortedKeys.map(key => {
+        const value = row[key];
+        // Handle null, undefined, empty string consistently
+        if (value === null || value === undefined) return 'NULL';
+        if (value === '') return 'EMPTY';
+        // Convert to string and trim whitespace
+        return String(value).trim();
+      });
+      
+      const rowSignature = rowValues.join('|FIELD_SEP|');
+      
+      if (!rowGroups.has(rowSignature)) {
+        rowGroups.set(rowSignature, []);
       }
-      rowGroups.get(rowKey)!.push(index);
+      rowGroups.get(rowSignature)!.push(index);
     });
     
-    // Find groups with more than one row (exact duplicates)
+    // Only consider groups with more than one row as duplicates
     const duplicateGroups: DuplicateGroup[] = [];
     let groupId = 1;
     
-    rowGroups.forEach((indexes, rowKey) => {
+    rowGroups.forEach((indexes, signature) => {
       if (indexes.length > 1) {
-        const sampleRow = rows[indexes[0]];
+        const firstRow = rows[indexes[0]];
         const sampleValues: {[key: string]: string} = {};
         
-        // Get first few non-null values for display
-        Object.keys(sampleRow).slice(0, 4).forEach(key => {
-          sampleValues[key] = String(sampleRow[key] || 'NULL');
+        // Show first few fields for preview
+        const previewKeys = Object.keys(firstRow).slice(0, 3);
+        previewKeys.forEach(key => {
+          const value = firstRow[key];
+          sampleValues[key] = value === null || value === undefined ? 'NULL' : String(value);
         });
         
         duplicateGroups.push({
           id: groupId++,
           count: indexes.length,
-          rowIndexes: indexes,
+          rowIndexes: [...indexes], // Create copy to avoid mutation
           sampleValues,
           selected: true
         });
         
-        console.log(`Found exact duplicate group ${groupId - 1} with ${indexes.length} identical rows`);
+        console.log(`Duplicate group ${groupId - 1}: ${indexes.length} rows at indexes [${indexes.slice(0, 5).join(', ')}${indexes.length > 5 ? '...' : ''}]`);
       }
     });
     
+    console.log(`Total duplicate groups found: ${duplicateGroups.length}`);
     return duplicateGroups;
   };
 
@@ -259,8 +263,13 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     const selectedDuplicates = duplicateGroups.filter(d => d.selected);
     const selectedInconsistencies = inconsistentValues.filter(i => i.selected);
     
-    // Calculate total duplicates to remove (keep one from each group)
-    const duplicatesRemoved = selectedDuplicates.reduce((total, group) => total + (group.count - 1), 0);
+    // FIXED: Calculate actual rows to remove more carefully
+    const totalRowsToRemove = selectedDuplicates.reduce((total, group) => {
+      // For each group, we keep 1 row and remove the rest
+      return total + (group.count - 1);
+    }, 0);
+    
+    console.log(`Will remove ${totalRowsToRemove} duplicate rows from ${selectedDuplicates.length} groups`);
     
     // Create standardized values mapping for inconsistencies
     const standardizedValues: {[varName: string]: {[oldValue: string]: string}} = {};
@@ -274,12 +283,14 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     });
     
     const changes = {
-      duplicatesRemoved,
+      duplicatesRemoved: totalRowsToRemove,
       inconsistentValuesFixed: selectedInconsistencies.length,
       standardizedValues,
       selectedDuplicateGroups: selectedDuplicates,
       selectedInconsistencies,
-      exactDuplicatesOnly: true // Flag to indicate we only remove exact duplicates
+      exactDuplicatesOnly: true,
+      // Add the actual row indexes to remove for precise removal
+      rowIndexesToRemove: selectedDuplicates.flatMap(group => group.rowIndexes.slice(1)) // Keep first, remove rest
     };
     
     console.log('Duplicates step changes:', changes);

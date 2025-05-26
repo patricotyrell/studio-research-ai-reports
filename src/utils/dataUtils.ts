@@ -561,7 +561,7 @@ export const hasDatasetBeenModified = () => {
   return Object.values(completedSteps).some(step => step === true);
 };
 
-// Apply data preparation changes with improved flow
+// FIXED: Apply data preparation changes with much more careful handling
 export const applyDataPrepChanges = (stepType: string, changes: any) => {
   console.log(`Applying data prep changes for ${stepType}:`, changes);
   
@@ -752,34 +752,15 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
     case 'fixDuplicates':
       console.log('Applying duplicate removal changes:', changes);
       
-      if (changes.duplicatesRemoved > 0 && changes.exactDuplicatesOnly) {
-        // FIXED: Use a more precise duplicate detection that only removes 100% identical rows
-        const uniqueRowsMap = new Map<string, number>();
-        const rowsToKeep: any[] = [];
-        let duplicatesRemoved = 0;
+      // FIXED: Only remove duplicates if we have specific row indexes to remove
+      if (changes.duplicatesRemoved > 0 && changes.rowIndexesToRemove && Array.isArray(changes.rowIndexesToRemove)) {
+        const indexesToRemove = new Set(changes.rowIndexesToRemove);
+        console.log(`Removing ${indexesToRemove.size} specific duplicate rows:`, Array.from(indexesToRemove));
         
-        // Create row signatures and identify duplicates
-        updatedRows.forEach((row, index) => {
-          // Create a precise string representation including ALL fields and their exact values
-          const allKeys = Object.keys(row).sort();
-          const rowSignature = allKeys
-            .map(key => `${key}=${String(row[key] || 'NULL').trim()}`)
-            .join('||');
-          
-          if (uniqueRowsMap.has(rowSignature)) {
-            // This is an exact duplicate, don't keep it
-            duplicatesRemoved++;
-            console.log(`Removing exact duplicate row ${index} with signature: ${rowSignature.substring(0, 100)}...`);
-          } else {
-            // First occurrence of this exact row signature, keep it
-            uniqueRowsMap.set(rowSignature, index);
-            rowsToKeep.push(row);
-          }
-        });
+        // Filter out the specific rows that were identified as duplicates
+        updatedRows = updatedRows.filter((_, index) => !indexesToRemove.has(index));
         
-        updatedRows = rowsToKeep;
-        
-        console.log(`Removed ${duplicatesRemoved} exact duplicate rows. Remaining: ${updatedRows.length}`);
+        console.log(`Rows after duplicate removal: ${updatedRows.length} (removed ${indexesToRemove.size})`);
       }
       
       // Handle inconsistent values standardization
