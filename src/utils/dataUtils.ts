@@ -30,7 +30,7 @@ export const getCurrentDatasetState = () => {
   };
 };
 
-// CRITICAL: Get dataset specifically for analysis/visualization - NEVER override real data
+// CRITICAL: Get dataset specifically for analysis/visualization
 export const getDatasetForAnalysis = () => {
   console.log('🎯 VISUALIZATION MODULE - getDatasetForAnalysis called');
   
@@ -80,10 +80,10 @@ export const getDatasetForAnalysis = () => {
     };
   }
   
-  // If no data found, try to initialize with sample data for demo purposes
-  console.warn('⚠️ VISUALIZATION MODULE - No dataset found, initializing sample data');
+  // If no data found, provide minimal demo data
+  console.log('⚠️ VISUALIZATION MODULE - No dataset found, providing minimal demo data');
   
-  // Create minimal sample data
+  // Create minimal sample data with correct types
   const sampleRows = [
     { ID: 1, Name: 'Sample A', Value: 100, Category: 'Type 1' },
     { ID: 2, Name: 'Sample B', Value: 150, Category: 'Type 2' },
@@ -92,7 +92,7 @@ export const getDatasetForAnalysis = () => {
     { ID: 5, Name: 'Sample E', Value: 125, Category: 'Type 2' }
   ];
   
-  const sampleVariables = [
+  const sampleVariables: DataVariable[] = [
     { name: 'ID', type: 'numeric', missing: 0, unique: 5, example: '1' },
     { name: 'Name', type: 'text', missing: 0, unique: 5, example: 'Sample A' },
     { name: 'Value', type: 'numeric', missing: 0, unique: 5, example: '100' },
@@ -101,19 +101,19 @@ export const getDatasetForAnalysis = () => {
   
   // Set the sample data in cache
   setDatasetCache(sampleRows, sampleVariables, {
-    fileName: 'Sample Dataset',
+    fileName: 'Demo Dataset',
     totalRows: sampleRows.length,
     totalColumns: sampleVariables.length,
     uploadedAt: new Date().toISOString()
   }, false);
   
-  console.log('📝 VISUALIZATION MODULE - Sample data initialized for demo');
+  console.log('📝 VISUALIZATION MODULE - Demo data initialized');
   
   return {
     variables: sampleVariables,
     rows: sampleRows,
     metadata: {
-      fileName: 'Sample Dataset',
+      fileName: 'Demo Dataset',
       totalRows: sampleRows.length,
       totalColumns: sampleVariables.length,
       uploadedAt: new Date().toISOString()
@@ -121,7 +121,7 @@ export const getDatasetForAnalysis = () => {
     prepChanges: {},
     isRealData: false,
     sessionId: generateSessionId(),
-    source: 'EMERGENCY_SAMPLE_DATA'
+    source: 'DEMO_DATA'
   };
 };
 
