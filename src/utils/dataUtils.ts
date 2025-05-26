@@ -750,13 +750,66 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
       
     case 'fixDuplicates':
+      console.log('Applying duplicate removal changes:', changes);
+      
       if (changes.duplicatesRemoved > 0) {
-        // Remove duplicate rows (simplified for demo)
-        const uniqueRows = updatedRows.filter((row, index, arr) => 
-          index === arr.findIndex(r => JSON.stringify(r) === JSON.stringify(row))
-        );
-        updatedRows = uniqueRows;
+        // Create a map to track unique rows
+        const uniqueRowsMap = new Map<string, any>();
+        const duplicateRowIndexes = new Set<number>();
+        
+        // Identify duplicates by creating row signatures
+        updatedRows.forEach((row, index) => {
+          // Create a string representation of the row (excluding null/undefined values)
+          const rowKey = Object.keys(row)
+            .sort()
+            .map(key => `${key}:${row[key] || ''}`)
+            .join('|');
+          
+          if (uniqueRowsMap.has(rowKey)) {
+            // This is a duplicate, mark for removal
+            duplicateRowIndexes.add(index);
+            console.log(`Marking duplicate row ${index} for removal`);
+          } else {
+            // First occurrence, keep it
+            uniqueRowsMap.set(rowKey, row);
+          }
+        });
+        
+        // Remove duplicate rows
+        updatedRows = updatedRows.filter((_, index) => !duplicateRowIndexes.has(index));
+        
+        console.log(`Removed ${duplicateRowIndexes.size} duplicate rows. Remaining: ${updatedRows.length}`);
       }
+      
+      // Handle inconsistent values standardization
+      if (changes.inconsistentValuesFixed && changes.standardizedValues) {
+        Object.entries(changes.standardizedValues).forEach(([varName, valueMapping]: [string, any]) => {
+          console.log(`Standardizing values for variable ${varName}:`, valueMapping);
+          
+          updatedRows = updatedRows.map(row => {
+            if (row[varName] && valueMapping[row[varName]]) {
+              return { ...row, [varName]: valueMapping[row[varName]] };
+            }
+            return row;
+          });
+          
+          // Update variable metadata if it's categorical
+          const variable = updatedVars.find(v => v.name === varName);
+          if (variable && variable.type === 'categorical' && variable.coding) {
+            const newCoding: {[key: string]: number} = {};
+            const standardizedCategories = [...new Set(Object.values(valueMapping))];
+            standardizedCategories.forEach((category, index) => {
+              newCoding[String(category)] = index;
+            });
+            variable.coding = newCoding;
+            variable.originalCategories = standardizedCategories.map(c => String(c));
+          }
+        });
+      }
+      break;
+      
+    default:
+      console.warn(`Unknown step type: ${stepType}`);
       break;
   }
   

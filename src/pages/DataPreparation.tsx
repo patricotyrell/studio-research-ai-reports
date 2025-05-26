@@ -9,10 +9,10 @@ import StepIndicator from '@/components/StepIndicator';
 import { Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import MissingValuesStep from '@/components/data-prep/MissingValuesStep';
 import StandardizeVariablesStep from '@/components/data-prep/StandardizeVariablesStep';
+import DuplicatesStep from '@/components/data-prep/DuplicatesStep';
 import RecodeVariablesStep from '@/components/data-prep/RecodeVariablesStep';
 import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
 import RemoveColumnsStep from '@/components/data-prep/RemoveColumnsStep';
-import DuplicatesStep from '@/components/data-prep/DuplicatesStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
 import { saveStepCompletion, getCompletedSteps, applyDataPrepChanges, getCurrentDatasetState } from '@/utils/dataUtils';
 
@@ -58,7 +58,7 @@ const DataPreparation = () => {
       applyDataPrepChanges(step, changes);
       
       // Clear any subsequent step changes since data has changed
-      const stepOrder = ['missingValues', 'standardizeVariables', 'recodeVariables', 'compositeScores', 'removeColumns', 'fixDuplicates'];
+      const stepOrder = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
       const currentStepIndex = stepOrder.indexOf(step);
       if (currentStepIndex >= 0) {
         const updatedStepChanges = { ...newStepChanges };
@@ -120,8 +120,8 @@ const DataPreparation = () => {
   };
   
   const renderCurrentStep = () => {
-    // Reordered step names: standardizeVariables moved before recodeVariables
-    const stepNames = ['missingValues', 'standardizeVariables', 'recodeVariables', 'compositeScores', 'removeColumns', 'fixDuplicates'];
+    // Updated step order: duplicates moved to step 3 (before recoding)
+    const stepNames = ['missingValues', 'standardizeVariables', 'fixDuplicates', 'recodeVariables', 'compositeScores', 'removeColumns'];
     
     const commonProps = {
       onComplete: (autoApplied: boolean, changes?: any) => {
@@ -153,28 +153,28 @@ const DataPreparation = () => {
         );
       case 3:
         return (
-          <RecodeVariablesStep 
+          <DuplicatesStep 
             {...commonProps}
             showBackButton={true}
           />
         );
       case 4:
         return (
-          <CompositeScoresStep 
+          <RecodeVariablesStep 
             {...commonProps}
             showBackButton={true}
           />
         );
       case 5:
         return (
-          <RemoveColumnsStep 
+          <CompositeScoresStep 
             {...commonProps}
             showBackButton={true}
           />
         );
       case 6:
         return (
-          <DuplicatesStep 
+          <RemoveColumnsStep 
             {...commonProps}
             showBackButton={true}
           />
@@ -279,10 +279,10 @@ function getStepTitle(step: number): string {
   switch (step) {
     case 1: return "Handle Missing Values & Data Issues";
     case 2: return "Standardize Variable Names & Values";
-    case 3: return "Recode Variables";
-    case 4: return "Create Composite Scores";
-    case 5: return "Remove Unused Columns";
-    case 6: return "Fix Duplicates & Inconsistencies";
+    case 3: return "Fix Duplicates & Inconsistencies";
+    case 4: return "Recode Variables";
+    case 5: return "Create Composite Scores";
+    case 6: return "Remove Unused Columns";
     default: return "";
   }
 }
@@ -294,13 +294,13 @@ function getStepDescription(step: number): string {
     case 2:
       return "Clean up variable names and standardize categorical values for consistency.";
     case 3:
-      return "Assign numeric codes to categorical variables for analysis.";
-    case 4:
-      return "Combine multiple related questions to create composite scores or indices.";
-    case 5:
-      return "Remove variables that are irrelevant or have too many missing values.";
-    case 6:
       return "Find and fix duplicate entries and inconsistent values in your dataset.";
+    case 4:
+      return "Assign numeric codes to categorical variables for analysis.";
+    case 5:
+      return "Combine multiple related questions to create composite scores or indices.";
+    case 6:
+      return "Remove variables that are irrelevant or have too many missing values.";
     default:
       return "";
   }

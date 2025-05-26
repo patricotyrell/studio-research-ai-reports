@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,7 +10,7 @@ import StepFlow from '../StepFlow';
 import { getDatasetRows, getDatasetRowCount } from '@/utils/datasetCache';
 
 interface DuplicatesStepProps {
-  onComplete: (autoApplied: boolean) => void;
+  onComplete: (autoApplied: boolean, changes?: any) => void;
   onNext: () => void;
   onBack: () => void;
   showBackButton?: boolean;
@@ -248,8 +247,34 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
   };
   
   const handleComplete = () => {
-    onComplete(completedAutomatic);
-    onNext();
+    const selectedDuplicates = duplicateGroups.filter(d => d.selected);
+    const selectedInconsistencies = inconsistentValues.filter(i => i.selected);
+    
+    // Calculate total duplicates to remove (keep one from each group)
+    const duplicatesRemoved = selectedDuplicates.reduce((total, group) => total + (group.count - 1), 0);
+    
+    // Create standardized values mapping for inconsistencies
+    const standardizedValues: {[varName: string]: {[oldValue: string]: string}} = {};
+    selectedInconsistencies.forEach(inconsistency => {
+      const mapping: {[oldValue: string]: string} = {};
+      const standardValue = inconsistency.values[0]; // Use first value as standard
+      inconsistency.values.forEach(value => {
+        mapping[value] = standardValue;
+      });
+      standardizedValues[inconsistency.variable] = mapping;
+    });
+    
+    const changes = {
+      duplicatesRemoved,
+      inconsistentValuesFixed: selectedInconsistencies.length,
+      standardizedValues,
+      selectedDuplicateGroups: selectedDuplicates,
+      selectedInconsistencies
+    };
+    
+    console.log('Duplicates step changes:', changes);
+    
+    onComplete(completedAutomatic, changes);
   };
   
   const hasIssues = duplicateGroups.length > 0 || inconsistentValues.length > 0;
