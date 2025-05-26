@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getFullDatasetRows } from '@/utils/dataUtils';
 
 const PaginatedDataPreview: React.FC = () => {
@@ -11,6 +11,8 @@ const PaginatedDataPreview: React.FC = () => {
   const [currentRows, setCurrentRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const rowsPerPage = 10;
   
   const variables = getDatasetVariables();
@@ -20,15 +22,26 @@ const PaginatedDataPreview: React.FC = () => {
   console.log('- variables count:', variables?.length);
   console.log('- fileInfo:', fileInfo);
   
-  // Load data for current page with error handling and timeout
-  const loadPageData = async (page: number) => {
+  // Load data for current page with enhanced error handling and timeout
+  const loadPageData = async (page: number, isRetry: boolean = false) => {
     setLoading(true);
     setError(null);
+    setLoadingTimeout(false);
+    
+    if (!isRetry) {
+      setRetryCount(0);
+    }
     
     try {
-      // Add a timeout to prevent infinite loading
+      console.log(`Starting to load page ${page} data...`);
+      
+      // Set a shorter timeout for better UX
+      const timeoutDuration = 5000; // 5 seconds
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Loading timeout - data chunk too large')), 10000);
+        setTimeout(() => {
+          setLoadingTimeout(true);
+          reject(new Error('Loading timed out - please try again'));
+        }, timeoutDuration);
       });
       
       const dataPromise = getFullDatasetRows(page, rowsPerPage);
@@ -37,24 +50,51 @@ const PaginatedDataPreview: React.FC = () => {
       
       console.log(`Successfully loaded page ${page} data:`, rows.length, 'rows');
       if (rows.length > 0) {
-        console.log('First row sample:', rows[0]);
+        console.log('First row sample:', Object.keys(rows[0]).slice(0, 3));
+        console.log('Row data preview:', rows[0]);
       }
+      
       setCurrentRows(rows);
+      setError(null);
+      setLoadingTimeout(false);
+      
     } catch (error) {
       console.error('Error loading page data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+      setError(errorMessage);
       setCurrentRows([]);
+      
+      if (errorMessage.includes('timeout')) {
+        setLoadingTimeout(true);
+      }
     } finally {
       setLoading(false);
     }
   };
   
-  // Load initial data
+  // Retry function
+  const handleRetry = () => {
+    const newRetryCount = retryCount + 1;
+    setRetryCount(newRetryCount);
+    console.log(`Retrying data load (attempt ${newRetryCount})`);
+    loadPageData(currentPage, true);
+  };
+  
+  // Load initial data with immediate first page loading
   useEffect(() => {
     if (variables.length > 0 && fileInfo) {
+      console.log('Loading initial data for page 0...');
       loadPageData(currentPage);
     }
-  }, [variables.length, fileInfo, currentPage]);
+  }, [variables.length, fileInfo]);
+  
+  // Load new page data when page changes
+  useEffect(() => {
+    if (variables.length > 0 && fileInfo && currentPage > 0) {
+      console.log(`Page changed to ${currentPage}, loading new data...`);
+      loadPageData(currentPage);
+    }
+  }, [currentPage]);
   
   if (!fileInfo || !variables || variables.length === 0) {
     return (
@@ -79,47 +119,100 @@ const PaginatedDataPreview: React.FC = () => {
   const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
   
   const handlePrevious = () => {
-    if (currentPage > 0) {
+    if (currentPage > 0 && !loading) {
       setCurrentPage(currentPage - 1);
     }
   };
   
   const handleNext = () => {
-    if (currentPage < totalPages - 1) {
+    if (currentPage < totalPages - 1 && !loading) {
       setCurrentPage(currentPage + 1);
     }
   };
   
-  const isPreviousDisabled = currentPage === 0;
-  const isNextDisabled = currentPage >= totalPages - 1;
+  const isPreviousDisabled = currentPage === 0 || loading;
+  const isNextDisabled = currentPage >= totalPages - 1 || loading;
+  
+  // Show large dataset warning for files over 10k rows
+  const isLargeDataset = totalRows > 10000;
   
   return (
     <Card>
       <CardHeader className="py-4 px-6">
-        <CardTitle className="text-lg">Data Preview</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg">Data Preview</CardTitle>
+          {isLargeDataset && (
+            <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+              Large dataset: {totalRows.toLocaleString()} rows - Loading in chunks
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-40 p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700 mb-3"></div>
-            <span className="text-gray-600 text-sm">Loading data chunk...</span>
-            <span className="text-gray-400 text-xs mt-1">Page {currentPage + 1} of {totalPages}</span>
+            <span className="text-gray-600 text-sm">
+              {loadingTimeout ? 'Still loading preview...' : 'Loading data chunk...'}
+            </span>
+            <span className="text-gray-400 text-xs mt-1">
+              Page {currentPage + 1} of {totalPages}
+              {isLargeDataset && ' • Large dataset detected'}
+            </span>
+            {loadingTimeout && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleRetry}
+                className="mt-3"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Cancel & Retry
+              </Button>
+            )}
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-40 p-6">
-            <div className="text-red-600 text-sm mb-2">Failed to load data</div>
-            <div className="text-gray-500 text-xs mb-4">{error}</div>
+            <div className="text-red-600 text-sm mb-2">
+              {loadingTimeout ? 'Preview timed out' : 'Failed to load data'}
+            </div>
+            <div className="text-gray-500 text-xs mb-4 text-center max-w-md">
+              {error}
+              {retryCount > 0 && ` (Attempt ${retryCount})`}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleRetry}
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                {loadingTimeout ? 'Reload preview' : 'Retry'}
+              </Button>
+              {currentPage > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setCurrentPage(0);
+                    setError(null);
+                  }}
+                >
+                  Back to first page
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : currentRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 p-6">
+            <span className="text-gray-500 mb-2">No data available for this page</span>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => loadPageData(currentPage)}
+              onClick={handleRetry}
             >
-              Retry
+              Try loading again
             </Button>
-          </div>
-        ) : currentRows.length === 0 ? (
-          <div className="flex items-center justify-center h-40 p-6">
-            <span className="text-gray-500">No data available for this page</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -161,13 +254,16 @@ const PaginatedDataPreview: React.FC = () => {
         <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {endIndex} of {totalRows.toLocaleString()} rows
+            {isLargeDataset && (
+              <span className="text-orange-600 ml-2">(Chunked loading enabled)</span>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handlePrevious}
-              disabled={isPreviousDisabled || loading}
+              disabled={isPreviousDisabled}
               className="flex items-center gap-1"
               type="button"
             >
@@ -181,7 +277,7 @@ const PaginatedDataPreview: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={handleNext}
-              disabled={isNextDisabled || loading}
+              disabled={isNextDisabled}
               className="flex items-center gap-1"
               type="button"
             >

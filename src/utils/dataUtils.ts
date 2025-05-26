@@ -1,4 +1,3 @@
-
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 
@@ -150,6 +149,16 @@ export const getCompletedSteps = () => {
   return JSON.parse(stepsData);
 };
 
+// Cache for loaded data chunks to avoid re-parsing
+const dataCache = new Map<string, any[]>();
+const loadingPromises = new Map<string, Promise<any[]>>();
+
+// Clear cache when file changes
+const clearCacheForFile = () => {
+  dataCache.clear();
+  loadingPromises.clear();
+};
+
 // Enhanced process file data to handle both CSV and Excel files with memory optimization
 export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
   const fileName = file.name.toLowerCase();
@@ -159,6 +168,9 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   if (!isCSV && !isExcel) {
     throw new Error('Unsupported file format. Please upload a CSV or Excel file.');
   }
+  
+  // Clear any existing cache
+  clearCacheForFile();
   
   if (isExcel) {
     const result = await parseExcelFile(file, selectedSheet);
@@ -349,10 +361,7 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
-// Cache for loaded data chunks to avoid re-parsing
-const dataCache = new Map<string, any[]>();
-
-// Function to load data chunks on demand with caching
+// Enhanced function to load data chunks on demand with better caching and error handling
 export const loadDataChunk = async (startRow: number, rowCount: number): Promise<any[]> => {
   const cacheKey = `${startRow}-${rowCount}`;
   
@@ -360,6 +369,12 @@ export const loadDataChunk = async (startRow: number, rowCount: number): Promise
   if (dataCache.has(cacheKey)) {
     console.log(`Returning cached data for chunk ${cacheKey}`);
     return dataCache.get(cacheKey)!;
+  }
+  
+  // Check if there's already a loading promise for this chunk
+  if (loadingPromises.has(cacheKey)) {
+    console.log(`Waiting for existing promise for chunk ${cacheKey}`);
+    return await loadingPromises.get(cacheKey)!;
   }
   
   const fileUrl = sessionStorage.getItem('uploadedFileUrl');
@@ -371,61 +386,85 @@ export const loadDataChunk = async (startRow: number, rowCount: number): Promise
     return [];
   }
   
-  try {
-    console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount}`);
-    
-    if (fileType === 'excel') {
-      // For Excel files, we need to handle differently
-      // This is a simplified approach - in reality you'd want to use a streaming Excel parser
+  // Create and store the loading promise
+  const loadingPromise = (async () => {
+    try {
+      console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount}`);
+      
+      if (fileType === 'excel') {
+        // For Excel files, we need to handle differently
+        console.log('Excel chunked loading not fully implemented yet, returning empty array');
+        return [];
+      }
+      
+      // For CSV files
       const response = await fetch(fileUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      // This would require Excel parsing logic similar to excelUtils
-      // For now, return empty to prevent crashes
-      return [];
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.status}`);
+      }
+      
+      const text = await response.text();
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      
+      if (lines.length < 2) {
+        console.log('File has insufficient data');
+        return [];
+      }
+      
+      const headers = parseCSVLine(lines[0]);
+      const dataLines = lines.slice(1);
+      
+      const startIndex = Math.max(0, startRow);
+      const endIndex = Math.min(dataLines.length, startRow + rowCount);
+      
+      console.log(`Processing lines ${startIndex} to ${endIndex} of ${dataLines.length} total data lines`);
+      
+      const rows = [];
+      for (let i = startIndex; i < endIndex; i++) {
+        try {
+          const values = parseCSVLine(dataLines[i]);
+          const row: any = {};
+          headers.forEach((header, index) => {
+            const value = values[index] || null;
+            row[header] = value === '' ? null : value;
+          });
+          rows.push(row);
+        } catch (lineError) {
+          console.warn(`Error parsing line ${i + 1}:`, lineError);
+          // Continue with other lines
+        }
+      }
+      
+      // Cache the result
+      dataCache.set(cacheKey, rows);
+      
+      console.log(`Successfully loaded chunk: rows ${startIndex} to ${endIndex}, count: ${rows.length}`);
+      return rows;
+    } catch (error) {
+      console.error('Error loading data chunk:', error);
+      throw error; // Re-throw to be handled by the calling function
+    } finally {
+      // Remove the promise from the map when done
+      loadingPromises.delete(cacheKey);
     }
-    
-    // For CSV files
-    const response = await fetch(fileUrl);
-    const text = await response.text();
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    
-    if (lines.length < 2) return [];
-    
-    const headers = parseCSVLine(lines[0]);
-    const dataLines = lines.slice(1);
-    
-    const startIndex = Math.max(0, startRow);
-    const endIndex = Math.min(dataLines.length, startRow + rowCount);
-    
-    const rows = [];
-    for (let i = startIndex; i < endIndex; i++) {
-      const values = parseCSVLine(dataLines[i]);
-      const row: any = {};
-      headers.forEach((header, index) => {
-        const value = values[index] || null;
-        row[header] = value === '' ? null : value;
-      });
-      rows.push(row);
-    }
-    
-    // Cache the result
-    dataCache.set(cacheKey, rows);
-    
-    console.log(`Loaded chunk: rows ${startIndex} to ${endIndex}, count: ${rows.length}`);
-    return rows;
-  } catch (error) {
-    console.error('Error loading data chunk:', error);
-    return [];
-  }
+  })();
+  
+  // Store the promise
+  loadingPromises.set(cacheKey, loadingPromise);
+  
+  return await loadingPromise;
 };
 
-// Updated function to get full dataset rows for pagination
+// Updated function to get full dataset rows for pagination with better error handling
 export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
   const fileInfo = getCurrentFile();
   if (!fileInfo) {
     console.log('getFullDatasetRows: No file info found');
     return [];
   }
+  
+  console.log(`getFullDatasetRows called with page: ${page}, rowsPerPage: ${rowsPerPage}`);
+  console.log('File info:', { name: fileInfo.name, rows: fileInfo.rows, columns: fileInfo.columns });
   
   // First try to get prepared data rows (post data-prep)
   const preparedData = getPreparedDataRows();
@@ -462,9 +501,23 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     return baseRows;
   }
   
-  // For uploaded files, load data on demand
-  const startRow = page * rowsPerPage;
-  return await loadDataChunk(startRow, rowsPerPage);
+  // For uploaded files, load data on demand with better error handling
+  try {
+    const startRow = page * rowsPerPage;
+    console.log(`Loading chunk starting at row ${startRow} for page ${page}`);
+    const rows = await loadDataChunk(startRow, rowsPerPage);
+    
+    if (rows.length === 0 && page === 0) {
+      // If first page has no data, there might be an issue
+      console.warn('First page returned no data - potential parsing issue');
+    }
+    
+    return rows;
+  } catch (error) {
+    console.error('Error in getFullDatasetRows:', error);
+    // Return empty array instead of throwing to prevent UI crashes
+    return [];
+  }
 };
 
 // Save prepared variables data
@@ -602,7 +655,9 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   return { variables: updatedVars, previewRows: updatedRows };
 };
 
-// Clear data cache when needed
+// Clear data cache when needed (export this for external use)
 export const clearDataCache = () => {
   dataCache.clear();
+  loadingPromises.clear();
+  console.log('Data cache cleared');
 };
