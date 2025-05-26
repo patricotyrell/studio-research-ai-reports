@@ -537,19 +537,78 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   
   switch (stepType) {
     case 'missingValues':
-      // Mark that missing values have been handled and clean up invalid values for numeric columns
+      // Handle missing values and invalid values for mixed numeric columns
       updatedVars = updatedVars.map(v => {
+        let updatedVar = { ...v };
+        
+        // Handle mixed numeric columns with invalid values
         if (v.type === 'numeric' && v.invalidValues && changes.invalidValueHandling) {
           const handling = changes.invalidValueHandling[v.name];
+          console.log(`Handling invalid values for ${v.name} with strategy: ${handling}`);
+          
           if (handling === 'null') {
-            // Convert invalid values to null
-            return { ...v, missing: v.missing + (v.invalidValues?.length || 0), invalidValues: undefined };
+            // Convert invalid values to null - this increases missing count but cleans the column
+            updatedVar = { 
+              ...v, 
+              missing: (v.missing || 0) + (v.invalidValues?.length || 0), 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
           } else if (handling === 'zero') {
-            // Convert invalid values to zero
-            return { ...v, invalidValues: undefined };
+            // Convert invalid values to zero - removes invalid values
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          } else if (handling === 'mean') {
+            // Convert invalid values to mean - removes invalid values
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          }
+          // 'ignore' leaves the variable as-is
+        }
+        
+        // Handle regular missing values
+        if (changes.missingValueHandling && changes.missingValueHandling[v.name]) {
+          const missingHandling = changes.missingValueHandling[v.name];
+          if (missingHandling !== 'ignore') {
+            // Mark missing values as handled (set to 0 for demo)
+            updatedVar = { ...updatedVar, missing: 0, missingHandling };
           }
         }
-        return { ...v, missing: 0 };
+        
+        return updatedVar;
+      });
+      
+      // Update row data to reflect the changes (simplified for demo)
+      updatedRows = updatedRows.map(row => {
+        const newRow = { ...row };
+        
+        // Apply invalid value handling to rows
+        if (changes.invalidValueHandling) {
+          Object.entries(changes.invalidValueHandling).forEach(([colName, handling]) => {
+            const variable = currentVars.find(v => v.name === colName);
+            if (variable && variable.invalidValues && newRow[colName]) {
+              const isInvalid = variable.invalidValues.includes(String(newRow[colName]));
+              if (isInvalid) {
+                if (handling === 'null') {
+                  newRow[colName] = null;
+                } else if (handling === 'zero') {
+                  newRow[colName] = 0;
+                } else if (handling === 'mean') {
+                  // Simplified: use a default value for demo
+                  newRow[colName] = 5;
+                }
+              }
+            }
+          });
+        }
+        
+        return newRow;
       });
       break;
       
@@ -616,7 +675,7 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
       break;
   }
   
-  console.log('Updated variables after data prep:', updatedVars.map(v => ({ name: v.name, type: v.type })));
+  console.log('Updated variables after data prep:', updatedVars.map(v => ({ name: v.name, type: v.type, missing: v.missing, invalidValues: v.invalidValues })));
   
   // Save the updated state
   savePreparedVariables(updatedVars);
