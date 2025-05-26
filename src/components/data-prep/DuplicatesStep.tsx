@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import AIGuidance from '../AIGuidance';
 import StepFlow from '../StepFlow';
-import { getAllDatasetRows } from '@/utils/datasetCache';
+import { getDatasetRows, getDatasetRowCount } from '@/utils/datasetCache';
 
 interface DuplicatesStepProps {
   onComplete: (autoApplied: boolean, changes?: any) => void;
@@ -55,32 +55,39 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
   const [inconsistentValues, setInconsistentValues] = useState<InconsistentValue[]>([]);
   const [analyzing, setAnalyzing] = useState(true);
 
-  // FIXED: Analyze actual data for duplicates without modifying the cache
+  // Analyze actual data for duplicates and inconsistencies
   useEffect(() => {
     const analyzeData = async () => {
       setAnalyzing(true);
       
       try {
-        // CRITICAL: Get read-only copy of all rows without modifying cache
-        const allRows = getAllDatasetRows();
+        // Get all data from the dataset
+        const totalRows = getDatasetRowCount();
+        const pageSize = 100;
+        const totalPages = Math.ceil(totalRows / pageSize);
         
-        console.log(`Analyzing ${allRows.length} rows for duplicates and inconsistencies (READ-ONLY)`);
+        let allRows: any[] = [];
+        
+        // Fetch all data in chunks
+        for (let page = 0; page < totalPages; page++) {
+          const pageRows = getDatasetRows(page, pageSize);
+          allRows = [...allRows, ...pageRows];
+        }
+        
+        console.log(`Analyzing ${allRows.length} rows for duplicates and inconsistencies`);
         
         if (allRows.length === 0) {
           setAnalyzing(false);
           return;
         }
         
-        // Create a working copy for analysis to avoid modifying original data
-        const workingCopy = allRows.map(row => ({ ...row }));
-        
-        // FIXED: Use much more precise duplicate detection
-        const duplicates = findExactDuplicateRows(workingCopy);
-        console.log(`Found ${duplicates.length} exact duplicate groups (analysis only, no changes applied)`);
+        // Detect duplicates
+        const duplicates = findDuplicateRows(allRows);
+        console.log(`Found ${duplicates.length} duplicate groups`);
         
         // Detect inconsistent values
-        const inconsistencies = findInconsistentValues(workingCopy);
-        console.log(`Found ${inconsistencies.length} inconsistent value patterns (analysis only)`);
+        const inconsistencies = findInconsistentValues(allRows);
+        console.log(`Found ${inconsistencies.length} inconsistent value patterns`);
         
         setDuplicateGroups(duplicates);
         setInconsistentValues(inconsistencies);
@@ -95,69 +102,51 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     analyzeData();
   }, []);
 
-  // FIXED: Ultra-precise duplicate detection - only truly identical rows
-  const findExactDuplicateRows = (rows: any[]): DuplicateGroup[] => {
-    console.log('Starting PRECISE duplicate detection on', rows.length, 'rows');
-    
+  // Function to find duplicate rows
+  const findDuplicateRows = (rows: any[]): DuplicateGroup[] => {
     const rowGroups = new Map<string, number[]>();
     
     rows.forEach((row, index) => {
-      // Create the most precise row signature possible
-      const sortedKeys = Object.keys(row).sort();
+      // Create a string representation of the row (excluding null/undefined values)
+      const rowKey = Object.keys(row)
+        .sort()
+        .map(key => `${key}:${row[key] || ''}`)
+        .join('|');
       
-      // Create normalized row signature with strict value handling
-      const rowValues = sortedKeys.map(key => {
-        const value = row[key];
-        // Normalize values very carefully
-        if (value === null || value === undefined) return '__NULL__';
-        if (value === '') return '__EMPTY_STRING__';
-        if (typeof value === 'number') return `__NUM__${value}`;
-        if (typeof value === 'boolean') return `__BOOL__${value}`;
-        // Convert to string and preserve exact case and whitespace
-        return `__STR__${String(value)}`;
-      });
-      
-      const rowSignature = `ROW::${rowValues.join('||')}`;
-      
-      if (!rowGroups.has(rowSignature)) {
-        rowGroups.set(rowSignature, []);
+      if (!rowGroups.has(rowKey)) {
+        rowGroups.set(rowKey, []);
       }
-      rowGroups.get(rowSignature)!.push(index);
+      rowGroups.get(rowKey)!.push(index);
     });
     
-    // Only consider groups with more than one row as duplicates
+    // Find groups with more than one row (duplicates)
     const duplicateGroups: DuplicateGroup[] = [];
     let groupId = 1;
     
-    rowGroups.forEach((indexes, signature) => {
+    rowGroups.forEach((indexes, rowKey) => {
       if (indexes.length > 1) {
-        const firstRow = rows[indexes[0]];
+        const sampleRow = rows[indexes[0]];
         const sampleValues: {[key: string]: string} = {};
         
-        // Show first few fields for preview
-        const previewKeys = Object.keys(firstRow).slice(0, 3);
-        previewKeys.forEach(key => {
-          const value = firstRow[key];
-          sampleValues[key] = value === null || value === undefined ? 'NULL' : String(value);
+        // Get first few non-null values for display
+        Object.keys(sampleRow).slice(0, 4).forEach(key => {
+          sampleValues[key] = String(sampleRow[key] || '');
         });
         
         duplicateGroups.push({
           id: groupId++,
           count: indexes.length,
-          rowIndexes: [...indexes].sort((a, b) => a - b), // Sort indexes for consistency
+          rowIndexes: indexes,
           sampleValues,
           selected: true
         });
-        
-        console.log(`EXACT duplicate group ${groupId - 1}: ${indexes.length} identical rows at indexes [${indexes.slice(0, 3).join(', ')}${indexes.length > 3 ? '...' : ''}]`);
       }
     });
     
-    console.log(`Total EXACT duplicate groups found: ${duplicateGroups.length}`);
     return duplicateGroups;
   };
 
-  // Function to find inconsistent categorical values (case variations, etc.)
+  // Function to find inconsistent categorical values
   const findInconsistentValues = (rows: any[]): InconsistentValue[] => {
     const inconsistencies: InconsistentValue[] = [];
     
@@ -174,12 +163,6 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
         .map(val => String(val).trim());
       
       const uniqueValues = [...new Set(values)];
-      
-      // Only check for inconsistencies in categorical-like columns
-      // Skip columns that are likely to have many unique values (IDs, names, etc.)
-      if (uniqueValues.length > 20 || uniqueValues.length < 2) {
-        return; // Skip this column
-      }
       
       // Look for case variations and similar strings
       const variations = findStringVariations(uniqueValues);
@@ -267,18 +250,8 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     const selectedDuplicates = duplicateGroups.filter(d => d.selected);
     const selectedInconsistencies = inconsistentValues.filter(i => i.selected);
     
-    // FIXED: Calculate precise rows to remove
-    const rowIndexesToRemove: number[] = [];
-    selectedDuplicates.forEach(group => {
-      // For each group, keep the FIRST occurrence (lowest index) and remove the rest
-      const sortedIndexes = [...group.rowIndexes].sort((a, b) => a - b);
-      rowIndexesToRemove.push(...sortedIndexes.slice(1)); // Remove all except first
-    });
-    
-    // Sort row indexes in descending order for safe removal
-    rowIndexesToRemove.sort((a, b) => b - a);
-    
-    console.log(`Will remove ${rowIndexesToRemove.length} exact duplicate rows:`, rowIndexesToRemove.slice(0, 10));
+    // Calculate total duplicates to remove (keep one from each group)
+    const duplicatesRemoved = selectedDuplicates.reduce((total, group) => total + (group.count - 1), 0);
     
     // Create standardized values mapping for inconsistencies
     const standardizedValues: {[varName: string]: {[oldValue: string]: string}} = {};
@@ -292,20 +265,14 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     });
     
     const changes = {
-      duplicatesRemoved: rowIndexesToRemove.length,
+      duplicatesRemoved,
       inconsistentValuesFixed: selectedInconsistencies.length,
       standardizedValues,
       selectedDuplicateGroups: selectedDuplicates,
-      selectedInconsistencies,
-      exactDuplicatesOnly: true,
-      // CRITICAL: Provide exact row indexes for precise removal
-      rowIndexesToRemove: rowIndexesToRemove
+      selectedInconsistencies
     };
     
-    console.log('Duplicates step changes (PRECISE):', {
-      ...changes,
-      rowIndexesToRemove: rowIndexesToRemove.slice(0, 10) // Log first 10 for brevity
-    });
+    console.log('Duplicates step changes:', changes);
     
     onComplete(completedAutomatic, changes);
   };
@@ -356,7 +323,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
             <Check className="h-4 w-4 text-green-600" />
             <AlertTitle>Excellent Data Quality</AlertTitle>
             <AlertDescription>
-              Your dataset appears to be clean with no exact duplicate entries or inconsistent categorical values detected.
+              Your dataset appears to be clean with no duplicate entries or inconsistent categorical values detected.
             </AlertDescription>
           </Alert>
         </StepFlow>
@@ -366,7 +333,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     return (
       <StepFlow
         title="Fix Duplicates & Inconsistencies"
-        description={`We found ${duplicateGroups.length} exact duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
+        description={`We found ${duplicateGroups.length} duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
         onComplete={() => {}}
         onBack={onBack}
         showBackButton={showBackButton}
@@ -378,9 +345,9 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
       >
         <AIGuidance
           title="Fix Duplicates & Inconsistencies"
-          description={`We found ${duplicateGroups.length} exact duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
-          automaticDescription="AI will remove exact duplicates (100% identical rows) and standardize inconsistent values using intelligent pattern recognition."
-          manualDescription="Review each issue individually and decide how to handle exact duplicates and standardize values."
+          description={`We found ${duplicateGroups.length} duplicate entries and ${inconsistentValues.length} inconsistent values in your dataset.`}
+          automaticDescription="AI will remove exact duplicates and standardize inconsistent values using intelligent pattern recognition."
+          manualDescription="Review each issue individually and decide how to handle duplicates and standardize values."
           onAutomatic={handleAutomaticCleanup}
           onManual={handleManualReview}
           actionInProgress={processingAutomatic}
@@ -397,7 +364,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
     return (
       <StepFlow
         title="Data Issues Fixed"
-        description="AI has cleaned up exact duplicates and inconsistencies in your dataset."
+        description="AI has cleaned up duplicates and inconsistencies in your dataset."
         onComplete={handleComplete}
         onBack={() => setShowGuidance(true)}
         showBackButton={showBackButton}
@@ -412,13 +379,13 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
           <Check className="h-4 w-4 text-green-600" />
           <AlertTitle>Success!</AlertTitle>
           <AlertDescription>
-            We've fixed {selectedDuplicates.length} exact duplicate entries and {selectedInconsistencies.length} inconsistent values in your dataset.
+            We've fixed {selectedDuplicates.length} duplicate entries and {selectedInconsistencies.length} inconsistent values in your dataset.
           </AlertDescription>
         </Alert>
         
         {selectedDuplicates.length > 0 && (
           <>
-            <h3 className="font-medium text-lg mb-2">Exact Duplicate Entries Resolved</h3>
+            <h3 className="font-medium text-lg mb-2">Duplicate Entries Resolved</h3>
             <Card className="mb-6">
               <CardContent className="pt-6">
                 <Table>
@@ -433,10 +400,10 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                     {selectedDuplicates.map((group) => (
                       <TableRow key={group.id}>
                         <TableCell className="font-medium">Group {group.id}</TableCell>
-                        <TableCell>{group.count} identical entries</TableCell>
+                        <TableCell>{group.count} entries</TableCell>
                         <TableCell>
                           <Badge className="bg-red-100 text-red-800">
-                            Removed {group.count - 1} exact duplicates
+                            Removed {group.count - 1} duplicate entries
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -474,7 +441,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                         </TableCell>
                         <TableCell>
                           <Badge className="bg-green-100 text-green-800">
-                            {inconsistency.values[0]}
+                            {inconsistency.values[1]}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -507,7 +474,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
       >
         {duplicateGroups.length > 0 && (
           <div className="mb-8">
-            <h3 className="font-medium text-lg mb-4">Exact Duplicate Entries</h3>
+            <h3 className="font-medium text-lg mb-4">Duplicate Entries</h3>
             
             <div className="space-y-6">
               {duplicateGroups.map((group, index) => (
@@ -519,16 +486,16 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                           checked={group.selected}
                           onCheckedChange={(checked) => handleDuplicateSelection(index, checked === true)}
                         />
-                        <h4 className="font-medium">Exact Duplicate Group {group.id}</h4>
+                        <h4 className="font-medium">Duplicate Group {group.id}</h4>
                         <Badge className="bg-amber-100 text-amber-800">
-                          {group.count} 100% identical entries
+                          {group.count} identical entries
                         </Badge>
                       </div>
                     </div>
                     
                     <div className="bg-amber-50 p-3 rounded-md mb-3">
                       <p className="text-sm text-amber-800 mb-2">
-                        Found {group.count} rows with completely identical data at rows: {group.rowIndexes.join(', ')}
+                        Found {group.count} rows with identical data at rows: {group.rowIndexes.join(', ')}
                       </p>
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -542,7 +509,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                     
                     <div className="text-sm text-gray-600">
                       {group.selected ? 
-                        "Will keep first occurrence and remove exact duplicates." :
+                        "Will keep first occurrence and remove duplicates." :
                         "No action will be taken (duplicates will be preserved)."}
                     </div>
                   </CardContent>
@@ -582,7 +549,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                               <Badge variant="outline" className="bg-white">
                                 {value}
                               </Badge>
-                              {i === 0 && i < inconsistency.values.length - 1 && <span className="text-sm mx-2">vs</span>}
+                              {i === 0 && <span className="text-sm mx-2">vs</span>}
                             </div>
                           ))}
                         </div>
@@ -591,7 +558,7 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
                           <div className="ml-6">
                             <p className="text-sm mb-1">Will standardize to:</p>
                             <Badge className="bg-blue-100 text-blue-800">
-                              {inconsistency.values[0]}
+                              {inconsistency.values[1]}
                             </Badge>
                           </div>
                         )}
@@ -614,9 +581,9 @@ const DuplicatesStep: React.FC<DuplicatesStepProps> = ({
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5" />
             <div>
-              <h4 className="font-medium mb-1">About Exact Duplicate & Inconsistency Handling</h4>
+              <h4 className="font-medium mb-1">About Duplicate & Inconsistency Handling</h4>
               <p className="text-sm text-gray-600">
-                We only remove rows that are 100% identical across all fields to preserve legitimate data.
+                Removing duplicates ensures your statistical tests aren't biased by repeated data.
                 Standardizing inconsistent values (e.g., "male" vs "Male") prevents them from being 
                 treated as different categories, which would skew your analysis results.
               </p>

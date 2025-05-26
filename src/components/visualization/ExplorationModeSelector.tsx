@@ -1,45 +1,57 @@
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
-type ExplorationMode = 'guided' | 'custom';
+type ExplorationMode = 'distribution' | 'relationship' | 'comparison';
 
 interface ExplorationModeSelectorProps {
-  mode: ExplorationMode;
-  onModeChange: (mode: ExplorationMode) => void;
+  explorationMode: ExplorationMode;
+  onExplorationModeChange: (mode: ExplorationMode) => void;
 }
 
 const ExplorationModeSelector: React.FC<ExplorationModeSelectorProps> = ({
-  mode,
-  onModeChange,
+  explorationMode,
+  onExplorationModeChange,
 }) => {
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-medium">Exploration Mode</h3>
-      <RadioGroup 
-        value={mode} 
-        onValueChange={(value) => onModeChange(value as ExplorationMode)}
-        className="grid grid-cols-1 gap-3"
-      >
-        <div className="flex items-center space-x-2 p-3 border rounded-lg hover:border-primary hover:bg-slate-50 transition-all cursor-pointer">
-          <RadioGroupItem value="guided" id="guided" />
-          <div className="flex-1">
-            <Label htmlFor="guided" className="font-medium cursor-pointer">Guided Mode</Label>
-            <p className="text-xs text-gray-500">AI-recommended visualizations based on your data</p>
+    <>
+      <CardHeader>
+        <CardTitle>What do you want to explore?</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <RadioGroup 
+          value={explorationMode} 
+          onValueChange={(value) => onExplorationModeChange(value as ExplorationMode)}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
+          <div className="flex flex-col items-center p-4 border rounded-lg hover:border-primary hover:bg-slate-50 transition-all cursor-pointer">
+            <div className="mb-2 flex items-center justify-center">
+              <RadioGroupItem value="distribution" id="distribution" />
+            </div>
+            <Label htmlFor="distribution" className="font-medium text-center mb-1">Distribution of one variable</Label>
+            <p className="text-xs text-gray-500 text-center">Explore how values are distributed</p>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-2 p-3 border rounded-lg hover:border-primary hover:bg-slate-50 transition-all cursor-pointer">
-          <RadioGroupItem value="custom" id="custom" />
-          <div className="flex-1">
-            <Label htmlFor="custom" className="font-medium cursor-pointer">Custom Mode</Label>
-            <p className="text-xs text-gray-500">Choose your own variables and chart types</p>
+          
+          <div className="flex flex-col items-center p-4 border rounded-lg hover:border-primary hover:bg-slate-50 transition-all cursor-pointer">
+            <div className="mb-2 flex items-center justify-center">
+              <RadioGroupItem value="relationship" id="relationship" />
+            </div>
+            <Label htmlFor="relationship" className="font-medium text-center mb-1">Relationship between two variables</Label>
+            <p className="text-xs text-gray-500 text-center">Analyze correlations and patterns</p>
           </div>
-        </div>
-      </RadioGroup>
-    </div>
+          
+          <div className="flex flex-col items-center p-4 border rounded-lg hover:border-primary hover:bg-slate-50 transition-all cursor-pointer">
+            <div className="mb-2 flex items-center justify-center">
+              <RadioGroupItem value="comparison" id="comparison" />
+            </div>
+            <Label htmlFor="comparison" className="font-medium text-center mb-1">Comparison across groups</Label>
+            <p className="text-xs text-gray-500 text-center">Compare measures across categories</p>
+          </div>
+        </RadioGroup>
+      </CardContent>
+    </>
   );
 };
 

@@ -1,463 +1,831 @@
-import { getAllDatasetRows, getDatasetVariables, getDatasetMetadata, getPrepChanges, getDatasetInfo, isDatasetLoaded, setDatasetCache } from './datasetCache';
-import { DataVariable } from '@/services/sampleDataService';
+import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
+import { parseExcelFile, ExcelParseResult } from './excelUtils';
+import { 
+  setDatasetCache, 
+  updateDatasetCache,
+  getDatasetVariables as getCachedVariables,
+  getDatasetRows as getCachedRows,
+  getDatasetPreviewRows as getCachedPreviewRows,
+  getAllDatasetRows as getCachedAllRows,
+  getDatasetRowCount,
+  getDatasetMetadata,
+  getPrepChanges,
+  isDatasetLoaded,
+  clearDatasetCache,
+  restoreDatasetState,
+  initializeSampleDataCache
+} from './datasetCache';
 
-// Get the current state of the dataset (including any prep changes)
-export const getCurrentDatasetState = () => {
-  console.log('🔍 getCurrentDatasetState called');
+// Helper function to check if a value is numeric
+const isNumeric = (value: any): boolean => {
+  if (value === null || value === undefined || value === '') return false;
+  return !isNaN(Number(value)) && isFinite(Number(value));
+};
+
+// Enhanced variable analysis with improved numeric detection
+const analyzeVariable = (header: string, values: any[]): DataVariable => {
+  const nonEmptyValues = values.filter(v => v !== null && v !== '' && v !== undefined);
+  const uniqueValues = [...new Set(nonEmptyValues)];
+  const missingCount = values.length - nonEmptyValues.length;
   
-  const variables = getDatasetVariables();
-  const allRows = getAllDatasetRows();
+  // Check numeric percentage
+  const numericValues = nonEmptyValues.filter(v => isNumeric(v));
+  const numericPercentage = nonEmptyValues.length > 0 ? (numericValues.length / nonEmptyValues.length) * 100 : 0;
+  
+  let type: 'text' | 'categorical' | 'numeric' | 'date' = 'text';
+  let invalidValues: string[] = [];
+  
+  // Enhanced numeric detection: if 90% or more values are numeric, treat as numeric
+  if (numericPercentage >= 90 && nonEmptyValues.length > 0) {
+    type = 'numeric';
+    // Collect non-numeric values as invalid
+    invalidValues = nonEmptyValues
+      .filter(v => !isNumeric(v))
+      .map(v => String(v))
+      .filter((v, i, arr) => arr.indexOf(v) === i) // Remove duplicates
+      .slice(0, 10); // Limit to first 10 unique invalid values
+  } else if (uniqueValues.length <= 10 && nonEmptyValues.length > uniqueValues.length * 2) {
+    type = 'categorical';
+  } else if (nonEmptyValues.some(v => /^\d{4}-\d{2}-\d{2}/.test(String(v)))) {
+    type = 'date';
+  }
+
+  const coding: { [key: string]: number } = {};
+  if (type === 'categorical') {
+    uniqueValues.forEach((value, index) => {
+      coding[String(value)] = index;
+    });
+  }
+  
+  const result: DataVariable = {
+    name: header,
+    type,
+    missing: missingCount,
+    unique: uniqueValues.length,
+    example: nonEmptyValues[0] ? String(nonEmptyValues[0]) : 'N/A',
+    coding: type === 'categorical' ? coding : undefined,
+    originalCategories: type === 'categorical' ? uniqueValues.map(v => String(v)) : undefined
+  };
+
+  // Add numeric-specific properties if it's a numeric column with invalid values
+  if (type === 'numeric' && invalidValues.length > 0) {
+    result.invalidValues = invalidValues;
+    result.numericPercentage = numericPercentage;
+  }
+
+  return result;
+};
+
+// Helper function to check if in demo mode
+export const isDemoMode = () => {
+  return localStorage.getItem('isDemoMode') === 'true';
+};
+
+// Helper function to check if current file is sample data
+export const isSampleData = () => {
+  return localStorage.getItem('isSampleData') === 'true';
+};
+
+// Get current file information
+export const getCurrentFile = () => {
+  const fileData = localStorage.getItem('currentFile');
+  if (!fileData) return null;
+  
+  return JSON.parse(fileData);
+};
+
+// Get current project information (returns null in demo mode)
+export const getCurrentProject = () => {
+  if (isDemoMode()) return null;
+  
+  const projectData = localStorage.getItem('currentProject');
+  if (!projectData) return null;
+  
+  return JSON.parse(projectData);
+};
+
+// Save project information (disabled in demo mode)
+export const saveProject = (projectInfo: any) => {
+  if (isDemoMode()) return;
+  
+  localStorage.setItem('currentProject', JSON.stringify(projectInfo));
+  
+  // Also save to past projects list immediately
+  saveProjectToPastProjects(projectInfo);
+};
+
+// Save project to past projects list (disabled in demo mode)
+export const saveProjectToPastProjects = (project: any) => {
+  if (isDemoMode()) return;
+  
+  const pastProjects = getPastProjects();
+  
+  // Check if project already exists (by id)
+  const existingIndex = pastProjects.findIndex(p => p.id === project.id);
+  
+  if (existingIndex >= 0) {
+    // Update existing project
+    pastProjects[existingIndex] = { ...project, updatedAt: new Date().toISOString() };
+  } else {
+    // Add new project
+    pastProjects.push({ ...project, updatedAt: new Date().toISOString() });
+  }
+  
+  localStorage.setItem('pastProjects', JSON.stringify(pastProjects));
+};
+
+// Get past projects (returns empty array in demo mode)
+export const getPastProjects = () => {
+  if (isDemoMode()) return [];
+  
+  const savedProjects = localStorage.getItem('pastProjects');
+  return savedProjects ? JSON.parse(savedProjects) : [];
+};
+
+// Create a new project with file data (disabled in demo mode)
+export const createProject = (projectName: string, fileData: any, processedData?: any) => {
+  if (isDemoMode()) return null;
+  
+  const project = {
+    id: Date.now().toString(),
+    name: projectName,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    fileData,
+    processedData: processedData || {}
+  };
+  
+  // Save as current project and to past projects
+  saveProject(project);
+  
+  return project;
+};
+
+// Update project name (disabled in demo mode)
+export const updateProjectName = (newName: string) => {
+  if (isDemoMode()) return;
+  
+  const project = getCurrentProject();
+  if (project) {
+    project.name = newName;
+    project.updatedAt = new Date().toISOString();
+    saveProject(project);
+  }
+};
+
+// Update project with new data (disabled in demo mode)
+export const updateProject = (updates: any) => {
+  if (isDemoMode()) return null;
+  
+  const project = getCurrentProject();
+  if (project) {
+    const updatedProject = { 
+      ...project, 
+      ...updates, 
+      updatedAt: new Date().toISOString() 
+    };
+    saveProject(updatedProject);
+    return updatedProject;
+  }
+  return null;
+};
+
+// Clear demo mode data
+export const clearDemoMode = () => {
+  localStorage.removeItem('isDemoMode');
+  localStorage.removeItem('isSampleData');
+  localStorage.removeItem('currentFile');
+  localStorage.removeItem('processedData');
+  localStorage.removeItem('completedPrepSteps');
+  localStorage.removeItem('preparedVariables');
+};
+
+// Save preparation step completion status
+export const saveStepCompletion = (step: string, completed: boolean) => {
+  const currentSteps = getCompletedSteps();
+  currentSteps[step] = completed;
+  localStorage.setItem('completedPrepSteps', JSON.stringify(currentSteps));
+};
+
+// Get preparation step completion statuses
+export const getCompletedSteps = () => {
+  const stepsData = localStorage.getItem('completedPrepSteps');
+  if (!stepsData) {
+    return {
+      missingValues: false,
+      recodeVariables: false,
+      compositeScores: false,
+      standardizeVariables: false,
+      removeColumns: false,
+      fixDuplicates: false
+    };
+  }
+  
+  return JSON.parse(stepsData);
+};
+
+// Enhanced process file data with unified cache storage
+export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  const fileName = file.name.toLowerCase();
+  const isCSV = fileName.endsWith('.csv');
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+  
+  if (!isCSV && !isExcel) {
+    throw new Error('Unsupported file format. Please upload a CSV or Excel file.');
+  }
+  
+  console.log('Processing file:', fileName, 'Size:', file.size);
+  
+  let result: { variables: DataVariable[], previewRows: any[], totalRows: number };
+  
+  if (isExcel) {
+    const excelResult = await parseExcelFile(file, selectedSheet);
+    result = {
+      variables: excelResult.variables,
+      previewRows: excelResult.previewRows,
+      totalRows: excelResult.totalRows
+    };
+    
+    // For Excel, parseExcelFile already returns all rows in previewRows
+    const metadata = {
+      fileName: file.name,
+      totalRows: excelResult.totalRows,
+      totalColumns: excelResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(excelResult.previewRows, excelResult.variables, metadata);
+  } else {
+    // For CSV, get all rows and store in cache
+    const allRows = await getAllCSVRows(file);
+    const csvResult = await processCSVDataOptimized(file);
+    
+    const metadata = {
+      fileName: file.name,
+      totalRows: allRows.length,
+      totalColumns: csvResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(allRows, csvResult.variables, metadata);
+    
+    result = {
+      variables: csvResult.variables,
+      previewRows: allRows.slice(0, 5),
+      totalRows: allRows.length
+    };
+  }
+  
+  console.log('Dataset cached successfully:', {
+    totalRows: result.totalRows,
+    variables: result.variables.length
+  });
+  
+  return result;
+};
+
+// Helper function to get all CSV rows (not just preview)
+const getAllCSVRows = async (file: File): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        if (lines.length < 2) {
+          reject(new Error('File must contain at least a header row and one data row'));
+          return;
+        }
+        
+        // Parse header
+        const headers = parseCSVLine(lines[0]);
+        
+        // Process all rows
+        const allRows = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            allRows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i}:`, lineError);
+          }
+        }
+        
+        resolve(allRows);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
+// Helper function to properly parse CSV lines with quoted fields
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(field => field.replace(/^"|"$/g, ''));
+};
+
+// Enhanced CSV processing with improved type detection
+export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        if (lines.length < 2) {
+          reject(new Error('File must contain at least a header row and one data row'));
+          return;
+        }
+        
+        // Parse header
+        const headers = parseCSVLine(lines[0]);
+        console.log('CSV headers found:', headers.length);
+        
+        // Process all rows
+        const allRows = [];
+        
+        console.log('Processing', lines.length - 1, 'data rows');
+        
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            allRows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i}:`, lineError);
+          }
+        }
+        
+        console.log('Successfully processed', allRows.length, 'rows');
+        
+        // Analyze variables using enhanced logic
+        const sampleSize = Math.min(1000, allRows.length);
+        const sampleRows = allRows.slice(0, sampleSize);
+        
+        const variables: DataVariable[] = headers.map(header => {
+          const values = sampleRows.map(row => row[header]);
+          return analyzeVariable(header, values);
+        });
+        
+        const previewRows = allRows.slice(0, 5);
+        
+        resolve({
+          variables,
+          previewRows,
+          totalRows: allRows.length
+        });
+      } catch (error) {
+        console.error('Error processing CSV:', error);
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
+// Simplified functions using the new cache system
+export const getDatasetVariables = () => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) return [];
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData) {
+      // Initialize cache with sample data if not already done
+      if (!isDatasetLoaded()) {
+        initializeSampleDataCache(sampleData);
+      }
+    }
+  }
+  
+  return getCachedVariables();
+};
+
+export const getDatasetPreviewRows = () => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) return [];
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData) {
+      // Initialize cache with sample data if not already done
+      if (!isDatasetLoaded()) {
+        initializeSampleDataCache(sampleData);
+      }
+    }
+  }
+  
+  return getCachedPreviewRows();
+};
+
+// Simplified function for pagination - single source of truth
+export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) {
+    console.log('getFullDatasetRows: No file info found');
+    return [];
+  }
+  
+  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData && !isDatasetLoaded()) {
+      console.log('Initializing sample data cache');
+      initializeSampleDataCache(sampleData);
+    }
+  }
+  
+  // Get all rows from cache, then slice for pagination
+  const allRows = getCachedAllRows();
+  const startIndex = page * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedRows = allRows.slice(startIndex, endIndex);
+  
+  console.log(`Returning ${paginatedRows.length} rows from cache (${startIndex}-${endIndex})`);
+  return paginatedRows;
+};
+
+// Save prepared variables data
+export const savePreparedVariables = (variables: DataVariable[]) => {
+  localStorage.setItem('preparedVariables', JSON.stringify(variables));
+};
+
+// Get prepared variables
+export const getPreparedVariables = () => {
+  const variablesData = localStorage.getItem('preparedVariables');
+  if (!variablesData) return null;
+  
+  return JSON.parse(variablesData);
+};
+
+// Save prepared data rows
+export const savePreparedDataRows = (rows: any[]) => {
+  localStorage.setItem('preparedDataRows', JSON.stringify(rows));
+};
+
+// Get prepared data rows
+export const getPreparedDataRows = () => {
+  const rowsData = localStorage.getItem('preparedDataRows');
+  if (!rowsData) return null;
+  
+  return JSON.parse(rowsData);
+};
+
+// Get the most recent dataset state (for visualization and analysis)
+export const getCurrentDatasetState = () => {
+  // Try to restore state from localStorage first
+  restoreDatasetState();
+  
+  const variables = getCachedVariables();
+  const previewRows = getCachedPreviewRows();
+  const completedSteps = getCompletedSteps();
+  const prepChanges = getPrepChanges();
+  
+  return {
+    variables,
+    previewRows,
+    completedSteps,
+    prepChanges,
+    hasBeenPrepared: Object.keys(prepChanges).length > 0
+  };
+};
+
+// Ensure data consistency when navigating to visualization/analysis
+export const getDatasetForAnalysis = () => {
+  console.log('Getting dataset for analysis...');
+  
+  // Always use the current state from cache (which includes all prep changes)
+  const variables = getCachedVariables();
+  const allRows = getCachedAllRows();
   const metadata = getDatasetMetadata();
   const prepChanges = getPrepChanges();
-  const datasetInfo = getDatasetInfo();
   
-  console.log('📊 Current dataset state:', {
+  console.log('Dataset for analysis:', {
     variables: variables.length,
     rows: allRows.length,
-    metadata: metadata?.fileName || 'Unknown',
-    prepSteps: Object.keys(prepChanges),
-    isRealData: datasetInfo.isRealData,
-    sessionId: datasetInfo.sessionId
+    prepChanges: Object.keys(prepChanges)
   });
   
   return {
     variables,
     rows: allRows,
     metadata,
-    prepChanges,
-    isRealData: datasetInfo.isRealData,
-    sessionId: datasetInfo.sessionId
+    prepChanges
   };
 };
 
-// CRITICAL: Get dataset specifically for analysis/visualization
-export const getDatasetForAnalysis = () => {
-  console.log('🎯 VISUALIZATION MODULE - getDatasetForAnalysis called');
-  
-  // First, get current dataset state
-  const currentState = getCurrentDatasetState();
-  const datasetInfo = getDatasetInfo();
-  
-  // CRITICAL: Log the exact state we're working with
-  console.log('📊 VISUALIZATION MODULE - Dataset state check:', {
-    hasVariables: currentState.variables && currentState.variables.length > 0,
-    variableCount: currentState.variables?.length || 0,
-    hasRows: currentState.rows && currentState.rows.length > 0,
-    rowCount: currentState.rows?.length || 0,
-    isRealData: currentState.isRealData,
-    sessionId: currentState.sessionId,
-    fileName: datasetInfo.fileName || 'Unknown',
-    locked: datasetInfo.locked
-  });
-  
-  // Check if we have ANY valid data (real or sample)
-  const hasAnyValidData = currentState.variables && 
-                          currentState.variables.length > 0 && 
-                          currentState.rows && 
-                          currentState.rows.length > 0;
-  
-  if (hasAnyValidData) {
-    console.log('✅ VISUALIZATION MODULE - Dataset found and will be used:', {
-      type: currentState.isRealData ? 'REAL DATA' : 'SAMPLE DATA',
-      rows: currentState.rows.length,
-      variables: currentState.variables.length,
-      source: datasetInfo.fileName || 'Sample Dataset'
-    });
-    
-    return {
-      variables: currentState.variables,
-      rows: currentState.rows,
-      metadata: currentState.metadata || {
-        fileName: datasetInfo.fileName || 'Dataset',
-        totalRows: currentState.rows.length,
-        totalColumns: currentState.variables.length,
-        uploadedAt: new Date().toISOString()
-      },
-      prepChanges: currentState.prepChanges,
-      isRealData: currentState.isRealData,
-      sessionId: currentState.sessionId,
-      source: currentState.isRealData ? 'REAL_DATA_CACHE' : 'SAMPLE_DATA_CACHE'
-    };
-  }
-  
-  // If no data found, provide minimal demo data
-  console.log('⚠️ VISUALIZATION MODULE - No dataset found, providing minimal demo data');
-  
-  // Create minimal sample data with correct types
-  const sampleRows = [
-    { ID: 1, Name: 'Sample A', Value: 100, Category: 'Type 1' },
-    { ID: 2, Name: 'Sample B', Value: 150, Category: 'Type 2' },
-    { ID: 3, Name: 'Sample C', Value: 200, Category: 'Type 1' },
-    { ID: 4, Name: 'Sample D', Value: 75, Category: 'Type 3' },
-    { ID: 5, Name: 'Sample E', Value: 125, Category: 'Type 2' }
-  ];
-  
-  const sampleVariables: DataVariable[] = [
-    { name: 'ID', type: 'numeric', missing: 0, unique: 5, example: '1' },
-    { name: 'Name', type: 'text', missing: 0, unique: 5, example: 'Sample A' },
-    { name: 'Value', type: 'numeric', missing: 0, unique: 5, example: '100' },
-    { name: 'Category', type: 'categorical', missing: 0, unique: 3, example: 'Type 1' }
-  ];
-  
-  // Set the sample data in cache
-  setDatasetCache(sampleRows, sampleVariables, {
-    fileName: 'Demo Dataset',
-    totalRows: sampleRows.length,
-    totalColumns: sampleVariables.length,
-    uploadedAt: new Date().toISOString()
-  }, false);
-  
-  console.log('📝 VISUALIZATION MODULE - Demo data initialized');
-  
-  return {
-    variables: sampleVariables,
-    rows: sampleRows,
-    metadata: {
-      fileName: 'Demo Dataset',
-      totalRows: sampleRows.length,
-      totalColumns: sampleVariables.length,
-      uploadedAt: new Date().toISOString()
-    },
-    prepChanges: {},
-    isRealData: false,
-    sessionId: generateSessionId(),
-    source: 'DEMO_DATA'
-  };
-};
-
-// Re-export from datasetCache with proper export
-export { getDatasetVariables } from './datasetCache';
-
-// Get preview rows for data preview components
-export const getDatasetPreviewRows = (limit: number = 100) => {
-  const allRows = getAllDatasetRows();
-  return allRows.slice(0, limit);
-};
-
-// Check if dataset has been modified from original
+// Check if dataset has been modified during preparation
 export const hasDatasetBeenModified = () => {
-  const prepChanges = getPrepChanges();
-  return Object.keys(prepChanges).length > 0;
+  const completedSteps = getCompletedSteps();
+  return Object.values(completedSteps).some(step => step === true);
 };
 
-// Get current file info
-export const getCurrentFile = () => {
-  try {
-    const fileInfo = localStorage.getItem('currentFile');
-    return fileInfo ? JSON.parse(fileInfo) : null;
-  } catch {
-    return null;
-  }
-};
-
-// Get full dataset rows with pagination
-export const getFullDatasetRows = async (page: number = 0, limit: number = 100) => {
-  const allRows = getAllDatasetRows();
-  const start = page * limit;
-  const end = start + limit;
-  return allRows.slice(start, end);
-};
-
-// Apply data preparation changes
-export const applyDataPrepChanges = (stepName: string, changes: any) => {
-  console.log(`🔄 Applying data prep changes for step: ${stepName}`, changes);
-  // This would integrate with the datasetCache to apply changes
-  // For now, just log the changes
-};
-
-// Get current project info
-export const getCurrentProject = () => {
-  try {
-    const projectInfo = localStorage.getItem('currentProject');
-    return projectInfo ? JSON.parse(projectInfo) : null;
-  } catch {
-    return null;
-  }
-};
-
-// Update project name
-export const updateProjectName = (name: string) => {
-  const project = getCurrentProject();
-  if (project) {
-    project.name = name;
-    localStorage.setItem('currentProject', JSON.stringify(project));
-  }
-};
-
-// Get past projects
-export const getPastProjects = () => {
-  try {
-    const projects = localStorage.getItem('pastProjects');
-    return projects ? JSON.parse(projects) : [];
-  } catch {
-    return [];
-  }
-};
-
-// Check if in demo mode
-export const isDemoMode = () => {
-  return localStorage.getItem('demoMode') === 'true';
-};
-
-// Clear demo mode
-export const clearDemoMode = () => {
-  localStorage.removeItem('demoMode');
-};
-
-// Save step completion status
-export const saveStepCompletion = (stepName: string, completed: boolean) => {
-  try {
-    const completedSteps = getCompletedSteps();
-    completedSteps[stepName] = completed;
-    localStorage.setItem('completedSteps', JSON.stringify(completedSteps));
-  } catch (error) {
-    console.error('Error saving step completion:', error);
-  }
-};
-
-// Get completed steps
-export const getCompletedSteps = () => {
-  try {
-    const steps = localStorage.getItem('completedSteps');
-    return steps ? JSON.parse(steps) : {};
-  } catch {
-    return {};
-  }
-};
-
-// FIXED: Process file data with correct DataVariable type
-export const processFileData = async (file: File, selectedSheet?: string) => {
-  console.log('🔄 Processing file:', file.name);
+// Apply data preparation changes with improved flow
+export const applyDataPrepChanges = (stepType: string, changes: any) => {
+  console.log(`Applying data prep changes for ${stepType}:`, changes);
   
-  try {
-    const text = await file.text();
-    let rows: any[] = [];
-    let variables: DataVariable[] = [];
-    
-    if (file.name.toLowerCase().endsWith('.csv')) {
-      // Simple CSV parsing
-      const lines = text.split('\n').filter(line => line.trim());
-      if (lines.length === 0) {
-        throw new Error('CSV file is empty');
-      }
-      
-      // Parse headers
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-      
-      // Parse data rows first to analyze them
-      rows = lines.slice(1).map((line, rowIndex) => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-        const row: any = {};
-        headers.forEach((header, colIndex) => {
-          const value = values[colIndex] || '';
-          // Try to detect numeric values
-          const numValue = parseFloat(value);
-          row[header || `Column_${colIndex + 1}`] = isNaN(numValue) ? value : numValue;
-        });
-        return row;
-      });
-      
-      // Create variables from headers with proper analysis
-      variables = headers.map((header, index) => {
-        const columnName = header || `Column_${index + 1}`;
-        const values = rows.map(row => row[columnName]).filter(val => val !== null && val !== undefined);
-        const uniqueValues = new Set(values).size;
-        const missingCount = rows.length - values.length;
-        const exampleValue = values.length > 0 ? String(values[0]) : '';
+  // Get current state from cache
+  const currentVars = getCachedVariables();
+  const currentRows = getCachedAllRows();
+  
+  // Apply changes based on step type
+  let updatedVars = [...currentVars];
+  let updatedRows = [...currentRows];
+  
+  switch (stepType) {
+    case 'missingValues':
+      // Handle missing values and invalid values for mixed numeric columns
+      updatedVars = updatedVars.map(v => {
+        let updatedVar = { ...v };
         
-        // Detect type based on data
-        let detectedType: 'numeric' | 'categorical' | 'text' = 'text';
-        const numericCount = values.filter(val => !isNaN(parseFloat(String(val)))).length;
-        const numericRatio = numericCount / values.length;
-        
-        if (numericRatio > 0.8) {
-          detectedType = 'numeric';
-        } else if (uniqueValues < values.length * 0.5 && uniqueValues < 20) {
-          detectedType = 'categorical';
+        // Handle mixed numeric columns with invalid values
+        if (v.type === 'numeric' && v.invalidValues && changes.invalidValueHandling) {
+          const handling = changes.invalidValueHandling[v.name];
+          console.log(`Handling invalid values for ${v.name} with strategy: ${handling}`);
+          
+          if (handling === 'null') {
+            updatedVar = { 
+              ...v, 
+              missing: (v.missing || 0) + (v.invalidValues?.length || 0), 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          } else if (handling === 'zero') {
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          } else if (handling === 'mean') {
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          }
         }
         
-        return {
-          name: columnName,
-          type: detectedType,
-          missing: missingCount,
-          unique: uniqueValues,
-          example: exampleValue
-        };
+        // Handle regular missing values
+        if (changes.missingValueHandling && changes.missingValueHandling[v.name]) {
+          const missingHandling = changes.missingValueHandling[v.name];
+          if (missingHandling !== 'ignore') {
+            updatedVar = { ...updatedVar, missing: 0, missingHandling };
+          }
+        }
+        
+        return updatedVar;
       });
       
-      console.log('✅ CSV parsed successfully:', {
-        headers: headers.length,
-        rows: rows.length,
-        sampleRow: rows[0]
+      // Update row data to reflect the changes
+      updatedRows = updatedRows.map(row => {
+        const newRow = { ...row };
+        
+        // Apply invalid value handling to rows
+        if (changes.invalidValueHandling) {
+          Object.entries(changes.invalidValueHandling).forEach(([colName, handling]) => {
+            const variable = currentVars.find(v => v.name === colName);
+            if (variable && variable.invalidValues && newRow[colName]) {
+              const isInvalid = variable.invalidValues.includes(String(newRow[colName]));
+              if (isInvalid) {
+                if (handling === 'null') {
+                  newRow[colName] = null;
+                } else if (handling === 'zero') {
+                  newRow[colName] = 0;
+                } else if (handling === 'mean') {
+                  newRow[colName] = 5; // Simplified for demo
+                }
+              }
+            }
+          });
+        }
+        
+        return newRow;
       });
+      break;
       
-    } else {
-      // For now, create sample data structure for Excel files
-      console.log('📋 Creating sample data structure for Excel file');
+    case 'standardizeVariables':
+      console.log('Applying variable standardization:', changes);
+      if (changes.standardizedNames) {
+        // First update variables
+        changes.standardizedNames.forEach((change: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
+          if (varIndex >= 0) {
+            console.log(`Updating variable name from "${change.oldName}" to "${change.newName}"`);
+            updatedVars[varIndex] = {
+              ...updatedVars[varIndex],
+              name: change.newName
+            };
+          }
+        });
+        
+        // Then update row data keys to match new variable names
+        updatedRows = updatedRows.map(row => {
+          let newRow = { ...row };
+          changes.standardizedNames.forEach((change: any) => {
+            if (newRow.hasOwnProperty(change.oldName)) {
+              newRow[change.newName] = newRow[change.oldName];
+              delete newRow[change.oldName];
+            }
+          });
+          return newRow;
+        });
+        
+        // Also handle categorical values standardization
+        if (changes.standardizedValues) {
+          Object.entries(changes.standardizedValues).forEach(([varName, valueChanges]: [string, any]) => {
+            const variable = updatedVars.find(v => v.name === varName);
+            if (variable && variable.type === 'categorical') {
+              // Update variable coding
+              const newCoding: {[key: string]: number} = {};
+              Object.entries(valueChanges).forEach(([oldValue, newValue]: [string, any], index) => {
+                newCoding[newValue] = index;
+              });
+              variable.coding = newCoding;
+              variable.originalCategories = Object.keys(newCoding);
+              
+              // Update row data
+              updatedRows = updatedRows.map(row => {
+                if (row[varName] && valueChanges[row[varName]]) {
+                  return { ...row, [varName]: valueChanges[row[varName]] };
+                }
+                return row;
+              });
+            }
+          });
+        }
+      }
+      break;
       
-      // Generate sample rows first
-      for (let i = 0; i < 100; i++) {
-        rows.push({
-          ID: i + 1,
-          Gender: i % 2 === 0 ? 'Male' : 'Female',
-          Age: 20 + Math.floor(Math.random() * 60),
-          Smoking_Status: i % 3 === 0 ? 'Smoker' : 'Non-Smoker',
-          Exercise_Level: ['Low', 'Medium', 'High'][i % 3],
-          BMI: 18 + Math.random() * 25,
-          Has_Hypertension: i % 4 === 0 ? 'Yes' : 'No',
-          Health_Score: 50 + Math.floor(Math.random() * 50)
+    case 'recodeVariables':
+      if (changes.recodedVariables) {
+        changes.recodedVariables.forEach((recode: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
+          if (varIndex >= 0) {
+            const originalVar = updatedVars[varIndex];
+            updatedVars[varIndex] = {
+              ...originalVar,
+              name: recode.newName || recode.originalName,
+              type: recode.newType || originalVar.type,
+              coding: recode.newCoding || originalVar.coding,
+              originalCategories: originalVar.originalCategories || originalVar.coding ? Object.keys(originalVar.coding) : undefined
+            };
+          }
         });
       }
+      break;
       
-      // Create variables with proper analysis
-      variables = [
-        { name: 'ID', type: 'numeric', missing: 0, unique: 100, example: '1' },
-        { name: 'Gender', type: 'categorical', missing: 0, unique: 2, example: 'Male' },
-        { name: 'Age', type: 'numeric', missing: 0, unique: 60, example: '25' },
-        { name: 'Smoking_Status', type: 'categorical', missing: 0, unique: 2, example: 'Non-Smoker' },
-        { name: 'Exercise_Level', type: 'categorical', missing: 0, unique: 3, example: 'Low' },
-        { name: 'BMI', type: 'numeric', missing: 0, unique: 100, example: '22.5' },
-        { name: 'Has_Hypertension', type: 'categorical', missing: 0, unique: 2, example: 'No' },
-        { name: 'Health_Score', type: 'numeric', missing: 0, unique: 50, example: '75' }
-      ];
-    }
-    
-    // CRITICAL: Store data in the dataset cache
-    const metadata = {
-      fileName: file.name,
-      totalRows: rows.length,
-      totalColumns: variables.length,
-      uploadedAt: new Date().toISOString()
-    };
-    
-    console.log('💾 Storing data in dataset cache:', {
-      rows: rows.length,
-      variables: variables.length,
-      metadata
-    });
-    
-    setDatasetCache(rows, variables, metadata, true);
-    
-    return {
-      variables,
-      totalRows: rows.length,
-      previewRows: rows.slice(0, 10)
-    };
-    
-  } catch (error) {
-    console.error('❌ Error processing file:', error);
-    throw new Error(`Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    case 'removeColumns':
+      if (changes.removedColumns) {
+        updatedVars = updatedVars.filter(v => !changes.removedColumns.includes(v.name));
+        updatedRows = updatedRows.map(row => {
+          const newRow = { ...row };
+          changes.removedColumns.forEach((col: string) => {
+            delete newRow[col];
+          });
+          return newRow;
+        });
+      }
+      break;
+      
+    case 'compositeScores':
+      if (changes.compositeVariables) {
+        // Add new composite variables
+        changes.compositeVariables.forEach((composite: any) => {
+          updatedVars.push({
+            name: composite.name,
+            type: 'numeric',
+            missing: 0,
+            unique: composite.uniqueValues || 10,
+            example: composite.exampleValue || '5.0'
+          });
+          
+          // Add composite scores to rows (simplified calculation)
+          updatedRows = updatedRows.map(row => ({
+            ...row,
+            [composite.name]: composite.exampleValue || Math.round(Math.random() * 10)
+          }));
+        });
+      }
+      break;
+      
+    case 'fixDuplicates':
+      console.log('Applying duplicate removal changes:', changes);
+      
+      if (changes.duplicatesRemoved > 0) {
+        // Create a map to track unique rows
+        const uniqueRowsMap = new Map<string, any>();
+        const duplicateRowIndexes = new Set<number>();
+        
+        // Identify duplicates by creating row signatures
+        updatedRows.forEach((row, index) => {
+          // Create a string representation of the row (excluding null/undefined values)
+          const rowKey = Object.keys(row)
+            .sort()
+            .map(key => `${key}:${row[key] || ''}`)
+            .join('|');
+          
+          if (uniqueRowsMap.has(rowKey)) {
+            // This is a duplicate, mark for removal
+            duplicateRowIndexes.add(index);
+            console.log(`Marking duplicate row ${index} for removal`);
+          } else {
+            // First occurrence, keep it
+            uniqueRowsMap.set(rowKey, row);
+          }
+        });
+        
+        // Remove duplicate rows
+        updatedRows = updatedRows.filter((_, index) => !duplicateRowIndexes.has(index));
+        
+        console.log(`Removed ${duplicateRowIndexes.size} duplicate rows. Remaining: ${updatedRows.length}`);
+      }
+      
+      // Handle inconsistent values standardization
+      if (changes.inconsistentValuesFixed && changes.standardizedValues) {
+        Object.entries(changes.standardizedValues).forEach(([varName, valueMapping]: [string, any]) => {
+          console.log(`Standardizing values for variable ${varName}:`, valueMapping);
+          
+          updatedRows = updatedRows.map(row => {
+            if (row[varName] && valueMapping[row[varName]]) {
+              return { ...row, [varName]: valueMapping[row[varName]] };
+            }
+            return row;
+          });
+          
+          // Update variable metadata if it's categorical
+          const variable = updatedVars.find(v => v.name === varName);
+          if (variable && variable.type === 'categorical' && variable.coding) {
+            const newCoding: {[key: string]: number} = {};
+            const standardizedCategories = [...new Set(Object.values(valueMapping))];
+            standardizedCategories.forEach((category, index) => {
+              newCoding[String(category)] = index;
+            });
+            variable.coding = newCoding;
+            variable.originalCategories = standardizedCategories.map(c => String(c));
+          }
+        });
+      }
+      break;
+      
+    default:
+      console.warn(`Unknown step type: ${stepType}`);
+      break;
   }
-};
-
-// Create project
-export const createProject = (name: string, fileInfo: any, processedData: any) => {
-  const project = {
-    name,
-    id: Date.now().toString(),
-    created: new Date().toISOString(),
-    fileInfo,
-    processedData
-  };
   
-  localStorage.setItem('currentProject', JSON.stringify(project));
+  console.log('Updated variables after data prep:', updatedVars.map(v => ({ 
+    name: v.name, 
+    type: v.type, 
+    missing: v.missing, 
+    invalidValues: v.invalidValues 
+  })));
   
-  // Add to past projects
-  const pastProjects = getPastProjects();
-  pastProjects.unshift(project);
-  localStorage.setItem('pastProjects', JSON.stringify(pastProjects.slice(0, 10))); // Keep last 10
-};
-
-// Calculate statistics for numeric variables
-export const calculateVariableStats = (data: any[], variableName: string) => {
-  const values = data
-    .map(row => parseFloat(row[variableName]))
-    .filter(val => !isNaN(val));
+  // Update the cache with the new state
+  updateDatasetCache(updatedRows, updatedVars, stepType, changes);
   
-  if (values.length === 0) return null;
+  // Also save to localStorage for persistence
+  savePreparedVariables(updatedVars);
+  savePreparedDataRows(updatedRows);
   
-  values.sort((a, b) => a - b);
-  
-  const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-  const median = values.length % 2 === 0 
-    ? (values[values.length / 2 - 1] + values[values.length / 2]) / 2
-    : values[Math.floor(values.length / 2)];
-  
-  return {
-    count: values.length,
-    mean: Number(mean.toFixed(2)),
-    median: Number(median.toFixed(2)),
-    min: values[0],
-    max: values[values.length - 1],
-    std: Number(Math.sqrt(values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length).toFixed(2))
-  };
-};
-
-// Calculate frequency distribution for categorical variables
-export const calculateFrequencyDistribution = (data: any[], variableName: string, limit: number = 10) => {
-  const counts: Record<string, number> = {};
-  
-  data.forEach(row => {
-    const value = row[variableName];
-    if (value !== undefined && value !== null && value !== '') {
-      const key = String(value);
-      counts[key] = (counts[key] || 0) + 1;
-    }
-  });
-  
-  return Object.entries(counts)
-    .map(([value, count]) => ({ value, count, percentage: (count / data.length) * 100 }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
-};
-
-// Detect variable type based on data
-export const detectVariableType = (data: any[], variableName: string): 'numeric' | 'categorical' | 'text' => {
-  const sample = data.slice(0, 100).map(row => row[variableName]).filter(val => val !== null && val !== undefined);
-  
-  if (sample.length === 0) return 'text';
-  
-  const numericCount = sample.filter(val => !isNaN(parseFloat(String(val)))).length;
-  const numericRatio = numericCount / sample.length;
-  
-  if (numericRatio > 0.8) return 'numeric';
-  
-  const uniqueValues = new Set(sample.map(val => String(val))).size;
-  const uniqueRatio = uniqueValues / sample.length;
-  
-  return uniqueRatio < 0.5 ? 'categorical' : 'text';
-};
-
-// Check data quality
-export const checkDataQuality = (data: any[], variables: DataVariable[]) => {
-  const totalRows = data.length;
-  const issues: string[] = [];
-  
-  const qualityReport = variables.map(variable => {
-    const values = data.map(row => row[variable.name]);
-    const missingCount = values.filter(val => val === null || val === undefined || val === '').length;
-    const missingPercentage = (missingCount / totalRows) * 100;
-    
-    if (missingPercentage > 50) {
-      issues.push(`${variable.name} has ${missingPercentage.toFixed(1)}% missing values`);
-    }
-    
-    return {
-      variable: variable.name,
-      missingCount,
-      missingPercentage: Number(missingPercentage.toFixed(2)),
-      totalValues: totalRows
-    };
-  });
-  
-  return {
-    qualityReport,
-    issues,
-    overallQuality: issues.length === 0 ? 'good' : issues.length < 3 ? 'fair' : 'poor'
-  };
-};
-
-// Helper function to generate session ID (if not already defined)
-const generateSessionId = () => {
-  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return { variables: updatedVars, previewRows: updatedRows.slice(0, 5) };
 };
