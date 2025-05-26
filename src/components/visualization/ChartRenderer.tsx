@@ -49,8 +49,17 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
     }
 
     if (chartType === 'histogram') {
-      // For histograms, create bins
-      const values = data.map(row => parseFloat(row[primaryVariable])).filter(val => !isNaN(val));
+      // For histograms, create bins - fix type conversion
+      const values = data.map(row => {
+        const value = row[primaryVariable];
+        const numericValue = parseFloat(String(value));
+        return isNaN(numericValue) ? null : numericValue;
+      }).filter(val => val !== null) as number[];
+      
+      if (values.length === 0) {
+        return [];
+      }
+      
       const min = Math.min(...values);
       const max = Math.max(...values);
       const binCount = 10;
