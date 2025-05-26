@@ -463,30 +463,33 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
     return [];
   }
   
-  console.log(`getFullDatasetRows called with page: ${page}, rowsPerPage: ${rowsPerPage}`);
-  console.log('File info:', { name: fileInfo.name, rows: fileInfo.rows, columns: fileInfo.columns });
+  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
   
-  // First try to get prepared data rows (post data-prep)
+  // First try prepared data (post data-prep)
   const preparedData = getPreparedDataRows();
   if (preparedData && preparedData.length > 0) {
-    console.log('getFullDatasetRows: Using prepared data, total rows:', preparedData.length);
+    console.log('Using prepared data, total rows:', preparedData.length);
     const startIndex = page * rowsPerPage;
     return preparedData.slice(startIndex, startIndex + rowsPerPage);
   }
   
+  // Handle sample data
   if (isSampleData() && fileInfo.id) {
     const sampleData = getSampleDataset(fileInfo.id);
     const baseRows = sampleData?.previewRows || [];
     if (baseRows.length > 0) {
-      // Generate additional sample rows for demonstration
+      // Generate extended sample data for demonstration
       const extendedRows = [];
-      for (let i = 0; i < Math.min(100, fileInfo.rows || 50); i++) {
+      const totalToGenerate = Math.min(1000, fileInfo.rows || 100);
+      
+      for (let i = 0; i < totalToGenerate; i++) {
         const baseRow = baseRows[i % baseRows.length];
         const modifiedRow = { ...baseRow };
         
+        // Modify IDs and names to create unique rows
         Object.keys(modifiedRow).forEach(key => {
           if (modifiedRow[key] && typeof modifiedRow[key] === 'string') {
-            if (key.toLowerCase().includes('id') || key.toLowerCase().includes('name')) {
+            if (key.toLowerCase().includes('id')) {
               modifiedRow[key] = `${modifiedRow[key]}_${i + 1}`;
             }
           }
@@ -494,28 +497,36 @@ export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number =
         
         extendedRows.push(modifiedRow);
       }
-      console.log('getFullDatasetRows: Using sample data, generated rows:', extendedRows.length);
+      
       const startIndex = page * rowsPerPage;
       return extendedRows.slice(startIndex, startIndex + rowsPerPage);
     }
-    return baseRows;
   }
   
-  // For uploaded files, load data on demand with better error handling
+  // For uploaded files, implement optimized chunked loading
   try {
     const startRow = page * rowsPerPage;
-    console.log(`Loading chunk starting at row ${startRow} for page ${page}`);
-    const rows = await loadDataChunk(startRow, rowsPerPage);
+    console.log(`Loading chunk: rows ${startRow} to ${startRow + rowsPerPage}`);
     
-    if (rows.length === 0 && page === 0) {
-      // If first page has no data, there might be an issue
-      console.warn('First page returned no data - potential parsing issue');
-    }
+    // Use Promise.race to implement timeout handling
+    const loadPromise = loadDataChunk(startRow, rowsPerPage);
+    const timeoutPromise = new Promise<any[]>((_, reject) => {
+      setTimeout(() => reject(new Error('Loading timeout')), 7000);
+    });
     
+    const rows = await Promise.race([loadPromise, timeoutPromise]);
+    
+    console.log(`Successfully loaded ${rows.length} rows for page ${page}`);
     return rows;
+    
   } catch (error) {
     console.error('Error in getFullDatasetRows:', error);
-    // Return empty array instead of throwing to prevent UI crashes
+    
+    // Return empty array for timeout/error cases to prevent UI crash
+    if (error instanceof Error && error.message.includes('timeout')) {
+      console.log('Timeout occurred, returning empty array');
+    }
+    
     return [];
   }
 };
