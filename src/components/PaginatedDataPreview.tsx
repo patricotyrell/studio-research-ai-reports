@@ -10,6 +10,7 @@ const PaginatedDataPreview: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [currentRows, setCurrentRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const rowsPerPage = 10;
   
   const variables = getDatasetVariables();
@@ -18,18 +19,30 @@ const PaginatedDataPreview: React.FC = () => {
   console.log('PaginatedDataPreview - Debug Info:');
   console.log('- variables count:', variables?.length);
   console.log('- fileInfo:', fileInfo);
-  console.log('- Variables:', variables?.map(v => ({ name: v.name, type: v.type, example: v.example })));
   
-  // Load data for current page
+  // Load data for current page with error handling and timeout
   const loadPageData = async (page: number) => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const rows = await getFullDatasetRows(page, rowsPerPage);
-      console.log(`Loaded page ${page} data:`, rows.length, 'rows');
-      console.log('First row sample:', rows[0]);
+      // Add a timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Loading timeout - data chunk too large')), 10000);
+      });
+      
+      const dataPromise = getFullDatasetRows(page, rowsPerPage);
+      
+      const rows = await Promise.race([dataPromise, timeoutPromise]) as any[];
+      
+      console.log(`Successfully loaded page ${page} data:`, rows.length, 'rows');
+      if (rows.length > 0) {
+        console.log('First row sample:', rows[0]);
+      }
       setCurrentRows(rows);
     } catch (error) {
       console.error('Error loading page data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load data');
       setCurrentRows([]);
     } finally {
       setLoading(false);
@@ -65,34 +78,20 @@ const PaginatedDataPreview: React.FC = () => {
   const startIndex = currentPage * rowsPerPage;
   const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
   
-  console.log('PaginatedDataPreview - Pagination Info:');
-  console.log('- totalPages:', totalPages);
-  console.log('- currentPage:', currentPage);
-  console.log('- currentRows.length:', currentRows.length);
-  console.log('- startIndex:', startIndex, 'endIndex:', endIndex);
-  
   const handlePrevious = () => {
-    console.log('Previous button clicked, current page:', currentPage);
     if (currentPage > 0) {
-      const newPage = currentPage - 1;
-      console.log('Moving to page:', newPage);
-      setCurrentPage(newPage);
+      setCurrentPage(currentPage - 1);
     }
   };
   
   const handleNext = () => {
-    console.log('Next button clicked, current page:', currentPage, 'total pages:', totalPages);
     if (currentPage < totalPages - 1) {
-      const newPage = currentPage + 1;
-      console.log('Moving to page:', newPage);
-      setCurrentPage(newPage);
+      setCurrentPage(currentPage + 1);
     }
   };
   
   const isPreviousDisabled = currentPage === 0;
   const isNextDisabled = currentPage >= totalPages - 1;
-  
-  console.log('Navigation state - isPreviousDisabled:', isPreviousDisabled, 'isNextDisabled:', isNextDisabled);
   
   return (
     <Card>
@@ -101,9 +100,26 @@ const PaginatedDataPreview: React.FC = () => {
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700"></div>
-            <span className="ml-2 text-gray-600">Loading data...</span>
+          <div className="flex flex-col items-center justify-center h-40 p-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-research-700 mb-3"></div>
+            <span className="text-gray-600 text-sm">Loading data chunk...</span>
+            <span className="text-gray-400 text-xs mt-1">Page {currentPage + 1} of {totalPages}</span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-40 p-6">
+            <div className="text-red-600 text-sm mb-2">Failed to load data</div>
+            <div className="text-gray-500 text-xs mb-4">{error}</div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => loadPageData(currentPage)}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : currentRows.length === 0 ? (
+          <div className="flex items-center justify-center h-40 p-6">
+            <span className="text-gray-500">No data available for this page</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -118,13 +134,11 @@ const PaginatedDataPreview: React.FC = () => {
               <TableBody>
                 {currentRows.map((row, rowIndex) => {
                   const actualRowIndex = startIndex + rowIndex;
-                  console.log(`Rendering row ${actualRowIndex}:`, row);
                   
                   return (
                     <TableRow key={actualRowIndex}>
                       {columnNames.map((column) => {
                         const cellValue = row[column];
-                        console.log(`Cell [${actualRowIndex}][${column}]:`, cellValue, typeof cellValue);
                         
                         return (
                           <TableCell key={`${actualRowIndex}-${column}`} className="py-2 whitespace-nowrap">

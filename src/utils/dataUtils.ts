@@ -162,13 +162,15 @@ export const processFileData = async (file: File, selectedSheet?: string): Promi
   
   if (isExcel) {
     const result = await parseExcelFile(file, selectedSheet);
-    // For Excel, store only essential data
-    const optimizedResult = {
-      variables: result.variables,
-      previewRows: result.previewRows,
-      totalRows: result.totalRows
-    };
-    return optimizedResult;
+    // Store file reference for chunked loading
+    const fileUrl = URL.createObjectURL(file);
+    sessionStorage.setItem('uploadedFileUrl', fileUrl);
+    sessionStorage.setItem('uploadedFileName', file.name);
+    sessionStorage.setItem('uploadedFileType', 'excel');
+    if (selectedSheet) {
+      sessionStorage.setItem('selectedSheet', selectedSheet);
+    }
+    return result;
   }
   
   // Handle CSV files with memory optimization
@@ -191,19 +193,21 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
         }
         
         // Parse header
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const headers = parseCSVLine(lines[0]);
         
         // Process only a sample of rows for analysis (first 1000 rows)
         const sampleSize = Math.min(1000, lines.length - 1);
-        const sampleRows = lines.slice(1, sampleSize + 1).map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const sampleRows = [];
+        
+        for (let i = 1; i <= sampleSize; i++) {
+          const values = parseCSVLine(lines[i]);
           const row: any = {};
           headers.forEach((header, index) => {
             const value = values[index] || null;
             row[header] = value === '' ? null : value;
           });
-          return row;
-        });
+          sampleRows.push(row);
+        }
         
         console.log('Processing CSV data optimized - sample rows:', sampleRows.length);
         console.log('Total file rows:', lines.length - 1);
@@ -245,10 +249,11 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
           };
         });
         
-        // Store the file for later access but don't store all data in localStorage
+        // Store the file for later access
         const fileUrl = URL.createObjectURL(file);
         sessionStorage.setItem('uploadedFileUrl', fileUrl);
         sessionStorage.setItem('uploadedFileName', file.name);
+        sessionStorage.setItem('uploadedFileType', 'csv');
         
         const previewRows = sampleRows.slice(0, 5);
         const totalRows = lines.length - 1;
@@ -259,6 +264,7 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
           totalRows
         });
       } catch (error) {
+        console.error('Error processing CSV:', error);
         reject(error);
       }
     };
@@ -266,6 +272,29 @@ export const processCSVDataOptimized = async (file: File): Promise<{ variables: 
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsText(file);
   });
+};
+
+// Helper function to properly parse CSV lines with quoted fields
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(field => field.replace(/^"|"$/g, ''));
 };
 
 // Get variables for the current dataset (real or sample)
@@ -320,10 +349,22 @@ export const getDatasetPreviewRows = () => {
   return [];
 };
 
-// Function to load data chunks on demand
+// Cache for loaded data chunks to avoid re-parsing
+const dataCache = new Map<string, any[]>();
+
+// Function to load data chunks on demand with caching
 export const loadDataChunk = async (startRow: number, rowCount: number): Promise<any[]> => {
+  const cacheKey = `${startRow}-${rowCount}`;
+  
+  // Check cache first
+  if (dataCache.has(cacheKey)) {
+    console.log(`Returning cached data for chunk ${cacheKey}`);
+    return dataCache.get(cacheKey)!;
+  }
+  
   const fileUrl = sessionStorage.getItem('uploadedFileUrl');
   const fileName = sessionStorage.getItem('uploadedFileName');
+  const fileType = sessionStorage.getItem('uploadedFileType');
   
   if (!fileUrl || !fileName) {
     console.log('No file URL found, returning empty array');
@@ -331,27 +372,44 @@ export const loadDataChunk = async (startRow: number, rowCount: number): Promise
   }
   
   try {
+    console.log(`Loading data chunk: rows ${startRow} to ${startRow + rowCount}`);
+    
+    if (fileType === 'excel') {
+      // For Excel files, we need to handle differently
+      // This is a simplified approach - in reality you'd want to use a streaming Excel parser
+      const response = await fetch(fileUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      // This would require Excel parsing logic similar to excelUtils
+      // For now, return empty to prevent crashes
+      return [];
+    }
+    
+    // For CSV files
     const response = await fetch(fileUrl);
     const text = await response.text();
     const lines = text.split('\n').filter(line => line.trim() !== '');
     
     if (lines.length < 2) return [];
     
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const headers = parseCSVLine(lines[0]);
     const dataLines = lines.slice(1);
     
     const startIndex = Math.max(0, startRow);
     const endIndex = Math.min(dataLines.length, startRow + rowCount);
     
-    const rows = dataLines.slice(startIndex, endIndex).map(line => {
-      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+    const rows = [];
+    for (let i = startIndex; i < endIndex; i++) {
+      const values = parseCSVLine(dataLines[i]);
       const row: any = {};
       headers.forEach((header, index) => {
         const value = values[index] || null;
         row[header] = value === '' ? null : value;
       });
-      return row;
-    });
+      rows.push(row);
+    }
+    
+    // Cache the result
+    dataCache.set(cacheKey, rows);
     
     console.log(`Loaded chunk: rows ${startIndex} to ${endIndex}, count: ${rows.length}`);
     return rows;
@@ -542,4 +600,9 @@ export const applyDataPrepChanges = (stepType: string, changes: any) => {
   savePreparedDataRows(updatedRows);
   
   return { variables: updatedVars, previewRows: updatedRows };
+};
+
+// Clear data cache when needed
+export const clearDataCache = () => {
+  dataCache.clear();
 };
