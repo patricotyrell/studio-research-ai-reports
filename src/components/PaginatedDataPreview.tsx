@@ -31,18 +31,17 @@ const PaginatedDataPreview: React.FC = () => {
       return;
     }
     
+    console.log(`Starting to load page ${page} data...`);
     setLoading(true);
     setError(null);
     
     try {
-      console.log(`Loading page ${page} data...`);
-      
       const rows = await getFullDatasetRows(page, rowsPerPage);
-      
-      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows');
+      console.log(`Successfully loaded page ${page}:`, rows.length, 'rows', rows);
       
       if (rows.length === 0 && page === 0) {
         setError('No data found. Please check your file format and try again.');
+        setCurrentRows([]);
       } else {
         setCurrentRows(rows);
         setError(null);
@@ -56,13 +55,18 @@ const PaginatedDataPreview: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [variables, fileInfo]);
+  }, [variables, fileInfo, rowsPerPage]);
   
   // Load data when component mounts or page changes
   useEffect(() => {
     if (variables.length > 0 && fileInfo) {
-      console.log(`Loading data for page ${currentPage}`);
+      console.log(`Effect triggered: Loading data for page ${currentPage}`);
       loadPageData(currentPage);
+    } else {
+      console.log('Effect triggered but missing data:', {
+        variablesLength: variables.length,
+        hasFileInfo: !!fileInfo
+      });
     }
   }, [currentPage, variables.length, fileInfo, loadPageData]);
   
@@ -76,6 +80,7 @@ const PaginatedDataPreview: React.FC = () => {
   // Navigation handlers
   const handlePrevious = useCallback(() => {
     if (currentPage > 0 && !loading) {
+      console.log('Going to previous page');
       setCurrentPage(prev => prev - 1);
     }
   }, [currentPage, loading]);
@@ -85,9 +90,10 @@ const PaginatedDataPreview: React.FC = () => {
     const totalPages = Math.ceil(totalRows / rowsPerPage);
     
     if (currentPage < totalPages - 1 && !loading) {
+      console.log('Going to next page');
       setCurrentPage(prev => prev + 1);
     }
-  }, [currentPage, fileInfo?.rows, loading]);
+  }, [currentPage, fileInfo?.rows, loading, rowsPerPage]);
   
   // Early return for no data
   if (!fileInfo || !variables || variables.length === 0) {
