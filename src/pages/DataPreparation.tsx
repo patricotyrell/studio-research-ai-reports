@@ -8,13 +8,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import StepIndicator from '@/components/StepIndicator';
 import { Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import MissingValuesStep from '@/components/data-prep/MissingValuesStep';
+import StandardizeVariablesStep from '@/components/data-prep/StandardizeVariablesStep';
 import RecodeVariablesStep from '@/components/data-prep/RecodeVariablesStep';
 import CompositeScoresStep from '@/components/data-prep/CompositeScoresStep';
-import StandardizeVariablesStep from '@/components/data-prep/StandardizeVariablesStep';
 import RemoveColumnsStep from '@/components/data-prep/RemoveColumnsStep';
 import DuplicatesStep from '@/components/data-prep/DuplicatesStep';
 import DataPrepSummary from '@/components/DataPrepSummary';
-import { saveStepCompletion, getCompletedSteps } from '@/utils/dataUtils';
+import { saveStepCompletion, getCompletedSteps, applyDataPrepChanges } from '@/utils/dataUtils';
 
 const TOTAL_STEPS = 6;
 
@@ -23,6 +23,7 @@ const DataPreparation = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState(getCompletedSteps());
   const [loading, setLoading] = useState(false);
+  const [stepChanges, setStepChanges] = useState<{[key: string]: any}>({});
   
   // Check if user is logged in and has data to prepare
   useEffect(() => {
@@ -39,7 +40,35 @@ const DataPreparation = () => {
     }
   }, [navigate]);
 
-  const handleStepComplete = (step: string, autoApplied: boolean) => {
+  const handleStepComplete = (step: string, autoApplied: boolean, changes?: any) => {
+    console.log(`Step ${step} completed with changes:`, changes);
+    
+    // Store the changes for this step
+    if (changes) {
+      const newStepChanges = { ...stepChanges, [step]: changes };
+      setStepChanges(newStepChanges);
+      
+      // Apply changes to dataset and propagate forward
+      applyDataPrepChanges(step, changes);
+      
+      // Clear any subsequent step changes since data has changed
+      const stepOrder = ['missingValues', 'standardizeVariables', 'recodeVariables', 'compositeScores', 'removeColumns', 'fixDuplicates'];
+      const currentStepIndex = stepOrder.indexOf(step);
+      if (currentStepIndex >= 0) {
+        const updatedStepChanges = { ...newStepChanges };
+        stepOrder.slice(currentStepIndex + 1).forEach(laterStep => {
+          delete updatedStepChanges[laterStep];
+          // Also reset completion status for later steps
+          const newCompletedSteps = { ...completedSteps };
+          newCompletedSteps[laterStep as keyof typeof completedSteps] = false;
+          setCompletedSteps(newCompletedSteps);
+          saveStepCompletion(laterStep, false);
+        });
+        setStepChanges(updatedStepChanges);
+      }
+    }
+    
+    // Mark step as completed
     const newCompletedSteps = { ...completedSteps };
     newCompletedSteps[step as keyof typeof completedSteps] = true;
     setCompletedSteps(newCompletedSteps);
@@ -81,11 +110,12 @@ const DataPreparation = () => {
   };
   
   const renderCurrentStep = () => {
-    const stepNames = ['missingValues', 'recodeVariables', 'compositeScores', 'standardizeVariables', 'removeColumns', 'fixDuplicates'];
+    // Updated step order: standardizeVariables moved before recodeVariables
+    const stepNames = ['missingValues', 'standardizeVariables', 'recodeVariables', 'compositeScores', 'removeColumns', 'fixDuplicates'];
     
     const commonProps = {
-      onComplete: (autoApplied: boolean) => {
-        handleStepComplete(stepNames[currentStep - 1], autoApplied);
+      onComplete: (autoApplied: boolean, changes?: any) => {
+        handleStepComplete(stepNames[currentStep - 1], autoApplied, changes);
         handleNext();
       },
       onNext: handleNext,
@@ -106,21 +136,21 @@ const DataPreparation = () => {
         );
       case 2:
         return (
-          <RecodeVariablesStep 
+          <StandardizeVariablesStep 
             {...commonProps}
             showBackButton={true}
           />
         );
       case 3:
         return (
-          <CompositeScoresStep 
+          <RecodeVariablesStep 
             {...commonProps}
             showBackButton={true}
           />
         );
       case 4:
         return (
-          <StandardizeVariablesStep 
+          <CompositeScoresStep 
             {...commonProps}
             showBackButton={true}
           />
@@ -237,10 +267,10 @@ const DataPreparation = () => {
 
 function getStepTitle(step: number): string {
   switch (step) {
-    case 1: return "Handle Missing Values";
-    case 2: return "Recode Variables";
-    case 3: return "Create Composite Scores";
-    case 4: return "Standardize Variable Names";
+    case 1: return "Handle Missing Values & Data Issues";
+    case 2: return "Standardize Variable Names & Values";
+    case 3: return "Recode Variables";
+    case 4: return "Create Composite Scores";
     case 5: return "Remove Unused Columns";
     case 6: return "Fix Duplicates & Inconsistencies";
     default: return "";
@@ -250,13 +280,13 @@ function getStepTitle(step: number): string {
 function getStepDescription(step: number): string {
   switch (step) {
     case 1: 
-      return "Missing values can bias your results. Choose how to handle variables with missing data.";
+      return "Handle missing values and invalid data that can bias your results.";
     case 2:
-      return "Standardize your categorical variables and assign numeric codes for analysis.";
+      return "Clean up variable names and standardize categorical values for consistency.";
     case 3:
-      return "Combine multiple related questions to create composite scores or indices.";
+      return "Assign numeric codes to categorical variables for analysis.";
     case 4:
-      return "Clean up variable names for clearer reporting and analysis.";
+      return "Combine multiple related questions to create composite scores or indices.";
     case 5:
       return "Remove variables that are irrelevant or have too many missing values.";
     case 6:

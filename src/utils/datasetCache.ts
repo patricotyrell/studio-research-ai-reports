@@ -10,13 +10,17 @@ interface DatasetCache {
     totalColumns: number;
     uploadedAt: string;
   } | null;
+  originalRows: any[]; // Keep original data for reset purposes
+  originalVariables: DataVariable[]; // Keep original variables
 }
 
 // Single source of truth for dataset
 let datasetCache: DatasetCache = {
   allRows: [],
   variables: [],
-  metadata: null
+  metadata: null,
+  originalRows: [],
+  originalVariables: []
 };
 
 // Store the complete dataset in memory
@@ -28,9 +32,11 @@ export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata
   });
   
   datasetCache = {
-    allRows: rows,
-    variables,
-    metadata
+    allRows: [...rows], // Copy arrays to avoid mutation
+    variables: [...variables],
+    metadata,
+    originalRows: [...rows], // Store original data
+    originalVariables: [...variables]
   };
   
   // Also store basic info in localStorage for persistence
@@ -41,9 +47,45 @@ export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata
   }
 };
 
+// Update dataset with modified data (for data prep steps)
+export const updateDatasetCache = (rows: any[], variables: DataVariable[]) => {
+  console.log('Updating dataset cache with modified data:', {
+    rows: rows.length,
+    variables: variables.length
+  });
+  
+  // Update the current state but preserve original data
+  datasetCache.allRows = [...rows];
+  datasetCache.variables = [...variables];
+  
+  // Update metadata row count if changed
+  if (datasetCache.metadata) {
+    datasetCache.metadata = {
+      ...datasetCache.metadata,
+      totalRows: rows.length,
+      totalColumns: variables.length
+    };
+  }
+};
+
+// Reset to original data (useful for starting fresh)
+export const resetDatasetCache = () => {
+  console.log('Resetting dataset cache to original data');
+  datasetCache.allRows = [...datasetCache.originalRows];
+  datasetCache.variables = [...datasetCache.originalVariables];
+  
+  if (datasetCache.metadata) {
+    datasetCache.metadata = {
+      ...datasetCache.metadata,
+      totalRows: datasetCache.originalRows.length,
+      totalColumns: datasetCache.originalVariables.length
+    };
+  }
+};
+
 // Get dataset variables
 export const getDatasetVariables = (): DataVariable[] => {
-  return datasetCache.variables;
+  return [...datasetCache.variables]; // Return copy to prevent mutation
 };
 
 // Get paginated rows
@@ -63,6 +105,11 @@ export const getDatasetRows = (page: number = 0, rowsPerPage: number = 10): any[
 // Get preview rows (first 5)
 export const getDatasetPreviewRows = (): any[] => {
   return datasetCache.allRows.slice(0, 5);
+};
+
+// Get all rows (for processing)
+export const getAllDatasetRows = (): any[] => {
+  return [...datasetCache.allRows]; // Return copy to prevent mutation
 };
 
 // Get total row count
@@ -86,7 +133,9 @@ export const clearDatasetCache = () => {
   datasetCache = {
     allRows: [],
     variables: [],
-    metadata: null
+    metadata: null,
+    originalRows: [],
+    originalVariables: []
   };
   localStorage.removeItem('datasetMetadata');
 };
