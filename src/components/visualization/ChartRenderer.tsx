@@ -76,7 +76,10 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
       });
       
       values.forEach(value => {
-        const binIndex = Math.min(Math.floor((value - min) / binSize), binCount - 1);
+        const numericValue = Number(value);
+        const numericMin = Number(min);
+        const numericBinSize = Number(binSize);
+        const binIndex = Math.min(Math.floor((numericValue - numericMin) / numericBinSize), binCount - 1);
         bins[binIndex].frequency++;
       });
       
