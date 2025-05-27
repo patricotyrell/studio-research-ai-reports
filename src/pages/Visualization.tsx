@@ -351,16 +351,45 @@ const Visualization = () => {
   };
   
   const addToReport = () => {
-    localStorage.setItem('chartData', JSON.stringify({
-      type: chartType,
-      data: chartData,
-      primaryVariable: primaryVariable,
-      secondaryVariable: secondaryVariable,
-      explorationMode,
-      insights,
-      visualizationType,
-      frequencyTableData
-    }));
+    const reportItem = {
+      id: `viz-${Date.now()}`,
+      type: visualizationType === 'chart' ? 'chart' : 'table',
+      title: `${chartType} Chart: ${primaryVariable}${secondaryVariable ? ' vs ' + secondaryVariable : ''}`,
+      content: {
+        type: chartType,
+        data: chartData,
+        primaryVariable: primaryVariable,
+        secondaryVariable: secondaryVariable,
+        explorationMode,
+        insights,
+        visualizationType,
+        frequencyTableData,
+        crosstabData
+      },
+      caption: insights,
+      addedAt: new Date().toISOString(),
+      source: 'visualization'
+    };
+    
+    // Save to both individual storage (for backward compatibility) and report items
+    localStorage.setItem('chartData', JSON.stringify(reportItem.content));
+    
+    // Load existing report items and add this one
+    const existingItems = localStorage.getItem('reportItems');
+    let reportItems = [];
+    if (existingItems) {
+      try {
+        reportItems = JSON.parse(existingItems);
+      } catch (e) {
+        console.warn('Could not parse existing report items:', e);
+      }
+    }
+    
+    // Remove any previous visualization items and add the new one
+    reportItems = reportItems.filter((item: any) => item.source !== 'visualization');
+    reportItems.push(reportItem);
+    
+    localStorage.setItem('reportItems', JSON.stringify(reportItems));
     
     toast({
       title: "Added to report",

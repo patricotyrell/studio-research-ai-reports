@@ -26,6 +26,8 @@ interface ReportItem {
   content: any;
   caption?: string;
   addedAt: string;
+  source: 'visualization' | 'analysis';
+  data?: any;
 }
 
 const Report = () => {
@@ -54,16 +56,71 @@ const Report = () => {
       return;
     }
     
-    // Load report items from localStorage
+    loadReportItems();
+  }, [navigate]);
+  
+  const loadReportItems = () => {
+    const items: ReportItem[] = [];
+    
+    // Load chart data from visualization module
+    const chartData = localStorage.getItem('chartData');
+    if (chartData) {
+      try {
+        const parsed = JSON.parse(chartData);
+        items.push({
+          id: `chart-${Date.now()}`,
+          type: 'chart',
+          title: `${parsed.type} Chart: ${parsed.primaryVariable}${parsed.secondaryVariable ? ' vs ' + parsed.secondaryVariable : ''}`,
+          content: parsed,
+          caption: parsed.insights || 'Visualization created in the Visualization module',
+          addedAt: new Date().toISOString(),
+          source: 'visualization',
+          data: parsed.data
+        });
+      } catch (e) {
+        console.warn('Could not load chart data:', e);
+      }
+    }
+    
+    // Load analysis results
+    const analysisResult = localStorage.getItem('analysisResult');
+    if (analysisResult) {
+      try {
+        const parsed = JSON.parse(analysisResult);
+        items.push({
+          id: `analysis-${Date.now()}`,
+          type: 'analysis',
+          title: `Statistical Analysis: ${parsed.type}`,
+          content: parsed,
+          caption: parsed.interpretation || 'Statistical analysis performed in the Analysis module',
+          addedAt: new Date().toISOString(),
+          source: 'analysis'
+        });
+      } catch (e) {
+        console.warn('Could not load analysis result:', e);
+      }
+    }
+    
+    // Load any previously saved report items
     const savedItems = localStorage.getItem('reportItems');
     if (savedItems) {
       try {
-        setReportItems(JSON.parse(savedItems));
+        const parsed = JSON.parse(savedItems);
+        // Merge with existing items, avoiding duplicates
+        parsed.forEach((item: ReportItem) => {
+          if (!items.find(existing => existing.id === item.id)) {
+            items.push(item);
+          }
+        });
       } catch (e) {
         console.warn('Could not load saved report items:', e);
       }
     }
-  }, [navigate]);
+    
+    setReportItems(items);
+    // Save the merged items back to localStorage
+    localStorage.setItem('reportItems', JSON.stringify(items));
+  };
   
   const generateReport = () => {
     setIsGenerating(true);
@@ -75,15 +132,27 @@ const Report = () => {
       
       setReportContent({
         methods: hasItems 
-          ? `Data analysis was performed using Research Studio. The dataset included ${reportItems.filter(item => item.type === 'chart').length} visualizations and ${reportItems.filter(item => item.type === 'analysis').length} statistical analyses. Data visualization and statistical tests were conducted to explore relationships between variables.`
+          ? `Data analysis was performed using Research Studio. The dataset included ${reportItems.filter(item => item.type === 'chart').length} visualizations and ${reportItems.filter(item => item.type === 'analysis').length} statistical analyses. ${reportItems.map(item => {
+              if (item.type === 'chart') {
+                return `Data visualization was conducted using ${item.content.type} charts.`;
+              } else if (item.type === 'analysis') {
+                return `Statistical testing was performed using ${item.content.type}.`;
+              }
+              return '';
+            }).join(' ')}`
           : 'No specific methodology can be reported as no analyses have been added to this report.',
         
         results: hasItems
-          ? `The analysis revealed the following findings based on ${reportItems.length} components added to this report:\n\n${reportItems.map((item, index) => `${index + 1}. ${item.title}${item.caption ? ': ' + item.caption : ''}`).join('\n')}`
+          ? `The analysis revealed the following findings based on ${reportItems.length} components added to this report:\n\n${reportItems.map((item, index) => `${index + 1}. ${item.title}${item.caption ? ': ' + item.caption : ''}`).join('\n\n')}`
           : 'No results are available as no analyses have been added to this report.',
         
         interpretation: hasItems
-          ? `Based on the analyses included in this report, the findings suggest meaningful patterns in the data. The visualizations and statistical tests provide insights into the relationships between variables. Further analysis may be warranted to explore these findings in greater depth.`
+          ? `Based on the analyses included in this report, the findings provide insights into the data patterns. ${reportItems.map(item => {
+              if (item.content.interpretation) {
+                return item.content.interpretation;
+              }
+              return '';
+            }).filter(text => text).join(' ')}`
           : 'No interpretation can be provided as no analyses have been added to this report.',
       });
       
@@ -115,6 +184,14 @@ const Report = () => {
     const updatedItems = reportItems.filter(item => item.id !== itemId);
     setReportItems(updatedItems);
     localStorage.setItem('reportItems', JSON.stringify(updatedItems));
+    
+    // Also remove from individual storage if it's the current item
+    const itemToRemove = reportItems.find(item => item.id === itemId);
+    if (itemToRemove?.source === 'visualization') {
+      localStorage.removeItem('chartData');
+    } else if (itemToRemove?.source === 'analysis') {
+      localStorage.removeItem('analysisResult');
+    }
     
     toast({
       title: "Item removed",
@@ -209,7 +286,10 @@ const Report = () => {
                     <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
                       {reportItems.map((item) => (
                         <div key={item.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
-                          <span className="truncate">{item.title}</span>
+                          <div className="flex-1">
+                            <span className="truncate block font-medium">{item.title}</span>
+                            <span className="text-gray-500 capitalize">({item.source})</span>
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -320,9 +400,18 @@ const Report = () => {
                                       </p>
                                     )}
                                     <div className="bg-white p-4 rounded border">
-                                      <p className="text-sm text-gray-600 text-center">
-                                        [{item.type.charAt(0).toUpperCase() + item.type.slice(1)} content would be displayed here]
-                                      </p>
+                                      {item.type === 'analysis' && item.content.testSummary ? (
+                                        <div className="space-y-2">
+                                          <p className="font-medium">{item.content.type}</p>
+                                          <p className="text-sm">Test Statistic: {item.content.testSummary.statistic?.toFixed(3)}</p>
+                                          <p className="text-sm">p-value: {item.content.testSummary.pValue < 0.001 ? '< 0.001' : item.content.testSummary.pValue?.toFixed(3)}</p>
+                                          <p className="text-sm text-gray-600">{item.content.interpretation}</p>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-gray-600 text-center">
+                                          [{item.type.charAt(0).toUpperCase() + item.type.slice(1)} content - {item.source} module]
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 ))}

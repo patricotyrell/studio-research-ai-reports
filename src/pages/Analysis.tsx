@@ -254,7 +254,36 @@ const Analysis = () => {
 
   const handleAddToReport = () => {
     if (analysisResult) {
+      const reportItem = {
+        id: `analysis-${Date.now()}`,
+        type: 'analysis',
+        title: `Statistical Analysis: ${analysisResult.type}`,
+        content: analysisResult,
+        caption: analysisResult.interpretation,
+        addedAt: new Date().toISOString(),
+        source: 'analysis'
+      };
+      
+      // Save to both individual storage (for backward compatibility) and report items
       localStorage.setItem('analysisResult', JSON.stringify(analysisResult));
+      
+      // Load existing report items and add this one
+      const existingItems = localStorage.getItem('reportItems');
+      let reportItems = [];
+      if (existingItems) {
+        try {
+          reportItems = JSON.parse(existingItems);
+        } catch (e) {
+          console.warn('Could not parse existing report items:', e);
+        }
+      }
+      
+      // Remove any previous analysis items and add the new one
+      reportItems = reportItems.filter((item: any) => item.source !== 'analysis');
+      reportItems.push(reportItem);
+      
+      localStorage.setItem('reportItems', JSON.stringify(reportItems));
+      
       toast({
         title: "Added to report",
         description: "Analysis results have been added to your report",

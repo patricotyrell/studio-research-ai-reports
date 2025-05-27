@@ -31,6 +31,46 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
   // Calculate total for verification
   const totalFrequency = data.reduce((sum, item) => sum + item.frequency, 0);
 
+  const handleAddToReport = () => {
+    const reportItem = {
+      id: `freq-table-${Date.now()}`,
+      type: 'table',
+      title: `Frequency Table: ${variableName}`,
+      content: {
+        type: 'frequency',
+        data: data,
+        variableName: variableName
+      },
+      caption: `Frequency distribution showing the count and percentage for each category of ${variableName}`,
+      addedAt: new Date().toISOString(),
+      source: 'visualization'
+    };
+    
+    // Load existing report items and add this one
+    const existingItems = localStorage.getItem('reportItems');
+    let reportItems = [];
+    if (existingItems) {
+      try {
+        reportItems = JSON.parse(existingItems);
+      } catch (e) {
+        console.warn('Could not parse existing report items:', e);
+      }
+    }
+    
+    reportItems.push(reportItem);
+    localStorage.setItem('reportItems', JSON.stringify(reportItems));
+    
+    // Also call the parent's onAddToReport if provided
+    if (onAddToReport) {
+      onAddToReport();
+    }
+    
+    toast({
+      title: "Added to report",
+      description: "Frequency table has been added to your report",
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -48,7 +88,7 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={onAddToReport}
+            onClick={handleAddToReport}
             className="flex items-center gap-1"
           >
             <PlusCircle className="h-4 w-4" />
