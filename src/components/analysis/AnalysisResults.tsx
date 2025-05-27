@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,37 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CheckCircle, Info, Download, FileText, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
-import { StatisticalTestResult } from '@/services/statisticalTestsService';
+
+// Update the interface to match what the service actually returns
+interface AssumptionCheck {
+  passed: boolean;
+  pValue: number;
+  testName: string;
+}
+
+interface StatisticalTestResult {
+  type: string;
+  description: string;
+  pValue: number;
+  significant: boolean;
+  statistic: number;
+  degreesOfFreedom?: number;
+  effectSize?: number;
+  interpretation: string;
+  testSummary: {
+    statistic: number;
+    pValue: number;
+    degreesOfFreedom?: number;
+    effectSize?: number;
+    confidenceInterval?: [number, number];
+    sampleSize?: number;
+  };
+  assumptions?: {
+    normality?: AssumptionCheck;
+    homogeneity?: AssumptionCheck;
+    recommendations?: string[];
+  };
+}
 
 interface AnalysisResultsProps {
   result: StatisticalTestResult;
