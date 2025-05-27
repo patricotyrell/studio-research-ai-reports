@@ -1,3 +1,4 @@
+
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 import { 
@@ -12,8 +13,9 @@ import {
   getPrepChanges,
   isDatasetLoaded,
   clearDatasetCache,
-  restoreDatasetState,
-  initializeSampleDataCache
+  clearProjectCache,
+  restoreDatasetState as restoreDatasetStateFromCache,
+  initializeSampleDataCache as initSampleDataCache
 } from './datasetCache';
 
 // Helper function to check if a value is numeric
@@ -76,9 +78,37 @@ const analyzeVariable = (header: string, values: any[]): DataVariable => {
   return result;
 };
 
+// Helper function to get current project ID
+const getCurrentProjectId = (): string | null => {
+  try {
+    const currentProject = localStorage.getItem('currentProject');
+    const currentFile = localStorage.getItem('currentFile');
+    
+    if (currentProject) {
+      const project = JSON.parse(currentProject);
+      return project.id;
+    }
+    
+    if (currentFile) {
+      const file = JSON.parse(currentFile);
+      return file.projectId || file.name;
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn('Error getting current project ID:', e);
+    return null;
+  }
+};
+
 // Helper function to check if in demo mode
 export const isDemoMode = () => {
   return localStorage.getItem('isDemoMode') === 'true';
+};
+
+// Helper function to clear demo mode
+export const clearDemoMode = () => {
+  localStorage.removeItem('isDemoMode');
 };
 
 // Helper function to check if current file is sample data
@@ -102,6 +132,15 @@ export const getCurrentProject = () => {
   if (!projectData) return null;
   
   return JSON.parse(projectData);
+};
+
+// Update project name
+export const updateProjectName = (newName: string) => {
+  const currentProject = getCurrentProject();
+  if (currentProject) {
+    const updatedProject = { ...currentProject, name: newName, updatedAt: new Date().toISOString() };
+    saveProject(updatedProject);
+  }
 };
 
 // Save project information (disabled in demo mode)
@@ -314,75 +353,96 @@ export const clearAllProjectData = (projectId?: string) => {
   localStorage.removeItem('chartConfigs');
 };
 
-// Restore dataset state from localStorage with project isolation
-export const restoreDatasetState = () => {
-  const currentProjectId = getCurrentProjectId();
-  if (!currentProjectId) {
-    console.log('No current project ID, cannot restore state');
-    return false;
-  }
-  
-  try {
-    const storageKey = `currentDatasetState_${currentProjectId}`;
-    const savedState = localStorage.getItem(storageKey);
-    
-    if (savedState) {
-      const { variables, prepChanges, metadata } = JSON.parse(savedState);
-      if (variables && Array.isArray(variables)) {
-        // Only restore if the cache is empty or belongs to a different project
-        if (!isDatasetLoaded() || datasetCache.projectId !== currentProjectId) {
-          datasetCache.variables = variables;
-          datasetCache.prepChanges = prepChanges || {};
-          datasetCache.projectId = currentProjectId;
-          if (metadata) {
-            datasetCache.metadata = metadata;
-          }
-          
-          console.log('Restored dataset state for project:', currentProjectId, {
-            variables: variables.length,
-            prepChanges: Object.keys(prepChanges || {})
-          });
-          return true;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Could not restore dataset state:', e);
-  }
-  return false;
+// Export the datasetCache functions with proper names
+export const getDatasetVariables = getCachedVariables;
+export const getDatasetPreviewRows = getCachedPreviewRows;
+export const getFullDatasetRows = getCachedRows;
+export const getAllDatasetRows = getCachedAllRows;
+
+// Check if dataset has been modified
+export const hasDatasetBeenModified = (): boolean => {
+  const prepChanges = getPrepChanges();
+  return Object.keys(prepChanges).length > 0;
 };
 
-// Initialize cache from sample data with project isolation
-export const initializeSampleDataCache = (sampleData: any) => {
-  if (sampleData?.variables && sampleData?.previewRows) {
-    const currentProjectId = getCurrentProjectId();
-    
-    // Generate extended rows for sample data
-    const extendedRows = [];
-    const baseRows = sampleData.previewRows;
-    const totalToGenerate = 100;
-    
-    for (let i = 0; i < totalToGenerate; i++) {
-      const baseRow = baseRows[i % baseRows.length];
-      const modifiedRow = { ...baseRow };
-      
-      Object.keys(modifiedRow).forEach(key => {
-        if (modifiedRow[key] && typeof modifiedRow[key] === 'string') {
-          if (key.toLowerCase().includes('id')) {
-            modifiedRow[key] = `${modifiedRow[key]}_${i + 1}`;
-          }
+// Get current dataset state
+export const getCurrentDatasetState = () => {
+  return {
+    variables: getDatasetVariables(),
+    previewRows: getDatasetPreviewRows(),
+    allRows: getAllDatasetRows(),
+    metadata: getDatasetMetadata(),
+    prepChanges: getPrepChanges(),
+    isLoaded: isDatasetLoaded()
+  };
+};
+
+// Apply data preparation changes
+export const applyDataPrepChanges = (stepName: string, changes: any) => {
+  console.log(`Applying data prep changes for step: ${stepName}`, changes);
+  
+  // Get current dataset state
+  const currentVariables = getDatasetVariables();
+  const currentRows = getAllDatasetRows();
+  
+  // Apply the changes based on step type
+  let updatedVariables = [...currentVariables];
+  let updatedRows = [...currentRows];
+  
+  // Update the dataset cache with changes
+  updateDatasetCache(updatedRows, updatedVariables, stepName, changes);
+};
+
+// Process file data
+export const processFileData = async (file: File, sheetName?: string): Promise<any> => {
+  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    const result = await parseExcelFile(file, sheetName);
+    return result;
+  } else {
+    // Handle CSV files
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.split('\n');
+          const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+          const rows = lines.slice(1)
+            .filter(line => line.trim())
+            .map(line => {
+              const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+              const row: any = {};
+              headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+              });
+              return row;
+            });
+          
+          const variables = headers.map(header => {
+            const values = rows.map(row => row[header]);
+            return analyzeVariable(header, values);
+          });
+          
+          resolve({
+            data: rows,
+            variables,
+            metadata: {
+              fileName: file.name,
+              totalRows: rows.length,
+              totalColumns: headers.length,
+              uploadedAt: new Date().toISOString()
+            }
+          });
+        } catch (error) {
+          reject(error);
         }
-      });
-      
-      extendedRows.push(modifiedRow);
-    }
-    
-    setDatasetCache(extendedRows, sampleData.variables, {
-      fileName: 'Sample Dataset',
-      totalRows: extendedRows.length,
-      totalColumns: sampleData.variables.length,
-      uploadedAt: new Date().toISOString(),
-      projectId: currentProjectId
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
     });
   }
 };
+
+// Re-export cache functions with proper aliases
+export const restoreDatasetState = restoreDatasetStateFromCache;
+export const initializeSampleDataCache = initSampleDataCache;
