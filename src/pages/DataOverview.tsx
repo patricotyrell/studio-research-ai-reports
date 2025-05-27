@@ -199,9 +199,6 @@ const DataOverview = () => {
             </CardContent>
           </Card>
           
-          {/* Auto-Generated Data Preview Charts */}
-          <AutoDataPreview columns={columns} />
-          
           {/* Data Preview */}
           <div className="mb-6">
             <PaginatedDataPreview />
@@ -216,6 +213,9 @@ const DataOverview = () => {
               />
             </div>
           )}
+          
+          {/* Auto-Generated Data Preview Charts - Moved to Bottom */}
+          <AutoDataPreview columns={columns} />
         </div>
       </div>
     </DashboardLayout>
