@@ -15,49 +15,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { AlertCircle, Download, FileText } from 'lucide-react';
+import { AlertCircle, Download, FileText, Plus } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import StepIndicator from '@/components/StepIndicator';
 
-interface AnalysisResult {
-  type: string;
-  description: string;
-  pValue: number;
-  significant: boolean;
-  statistic: number;
-  interpretation: string;
-}
-
-interface ChartData {
-  type: 'bar' | 'line' | 'pie';
-  data: any[];
-  groupBy: string;
-  measure: string;
+interface ReportItem {
+  id: string;
+  type: 'chart' | 'table' | 'analysis';
+  title: string;
+  content: any;
+  caption?: string;
+  addedAt: string;
 }
 
 const Report = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [chartData, setChartData] = useState<ChartData | null>(null);
   const [reportStyle, setReportStyle] = useState<'apa' | 'mla' | 'chicago'>('apa');
   const [reportSections, setReportSections] = useState({
-    introduction: true,
     methods: true,
     results: true,
-    discussion: true,
-    references: true,
+    interpretation: true,
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
   const [reportContent, setReportContent] = useState({
-    introduction: '',
     methods: '',
     results: '',
-    discussion: '',
-    references: '',
+    interpretation: '',
   });
+  const [reportItems, setReportItems] = useState<ReportItem[]>([]);
   
   useEffect(() => {
     // Check if user is logged in
@@ -67,18 +54,14 @@ const Report = () => {
       return;
     }
     
-    // Check if analysis was completed
-    const result = localStorage.getItem('analysisResult');
-    if (!result) {
-      navigate('/analysis');
-      return;
-    }
-    setAnalysisResult(JSON.parse(result));
-    
-    // Check if visualization was completed
-    const chartDataStr = localStorage.getItem('chartData');
-    if (chartDataStr) {
-      setChartData(JSON.parse(chartDataStr));
+    // Load report items from localStorage
+    const savedItems = localStorage.getItem('reportItems');
+    if (savedItems) {
+      try {
+        setReportItems(JSON.parse(savedItems));
+      } catch (e) {
+        console.warn('Could not load saved report items:', e);
+      }
     }
   }, [navigate]);
   
@@ -87,27 +70,21 @@ const Report = () => {
     
     // Simulate API call with timeout
     setTimeout(() => {
-      // Generate synthetic report content based on analysis and chart data
-      const groupVar = chartData?.groupBy || 'grouping variable';
-      const outVar = chartData?.measure || 'outcome variable';
+      // Generate report content based on added items
+      const hasItems = reportItems.length > 0;
       
-      // Create synthetic report content
       setReportContent({
-        introduction: `This study aimed to explore the relationship between ${groupVar} and ${outVar} in survey respondents. Prior research has suggested that ${groupVar} can influence ${outVar} in various contexts, but limited research has examined this relationship in this particular setting. Understanding this relationship can provide valuable insights for improving customer satisfaction and business outcomes.`,
+        methods: hasItems 
+          ? `Data analysis was performed using Research Studio. The dataset included ${reportItems.filter(item => item.type === 'chart').length} visualizations and ${reportItems.filter(item => item.type === 'analysis').length} statistical analyses. Data visualization and statistical tests were conducted to explore relationships between variables.`
+          : 'No specific methodology can be reported as no analyses have been added to this report.',
         
-        methods: `Data was collected through an online survey distributed to customers who had made a purchase within the last 30 days. The survey included demographic questions, including ${groupVar}, as well as questions measuring ${outVar} on a scale from 1-10. A total of 112 participants completed the survey, with a response rate of 28%. Statistical analysis was performed using Research Studio, with ${analysisResult?.type || 'statistical tests'} used to determine the relationship between variables.`,
+        results: hasItems
+          ? `The analysis revealed the following findings based on ${reportItems.length} components added to this report:\n\n${reportItems.map((item, index) => `${index + 1}. ${item.title}${item.caption ? ': ' + item.caption : ''}`).join('\n')}`
+          : 'No results are available as no analyses have been added to this report.',
         
-        results: `The analysis revealed ${analysisResult?.significant ? 'a significant' : 'no significant'} relationship between ${groupVar} and ${outVar} (${analysisResult?.type || 'statistical test'}, ${analysisResult?.statistic.toFixed(2) || 'statistic'}, p = ${analysisResult?.pValue.toFixed(3) || 'p-value'}). ${chartData?.groupBy === 'gender' ? 'Female respondents reported higher levels than male respondents.' : chartData?.groupBy === 'age_group' ? 'Younger respondents (18-34) showed significantly higher scores than older participants.' : 'Education level was positively correlated with the outcome measure.'}`,
-        
-        discussion: `The findings from this study indicate that ${groupVar} is indeed ${analysisResult?.significant ? 'a significant factor' : 'not a significant factor'} in determining ${outVar}. ${analysisResult?.significant ? 'This suggests that organizations should consider tailoring their approaches based on different ' + groupVar + ' groups to maximize ' + outVar + '.' : 'This suggests that organizations can apply uniform approaches across ' + groupVar + ' groups when seeking to improve ' + outVar + '.'}
-
-The limitations of this study include its relatively small sample size and reliance on self-reported data. Future research should consider a larger sample size and potentially include additional variables that might mediate the relationship between ${groupVar} and ${outVar}.`,
-        
-        references: `
-1. Smith, J. (2023). Survey methodology best practices. Journal of Research Methods, 42(3), 210-225.
-2. Johnson, A., & Williams, P. (2022). Factors influencing customer satisfaction in retail environments. International Journal of Business Studies, 15(2), 189-204.
-3. Research Studio. (2025). Data analysis platform for survey research. Retrieved from https://researchstudio.example.com
-        `,
+        interpretation: hasItems
+          ? `Based on the analyses included in this report, the findings suggest meaningful patterns in the data. The visualizations and statistical tests provide insights into the relationships between variables. Further analysis may be warranted to explore these findings in greater depth.`
+          : 'No interpretation can be provided as no analyses have been added to this report.',
       });
       
       setIsGenerating(false);
@@ -115,14 +92,12 @@ The limitations of this study include its relatively small sample size and relia
       
       toast({
         title: "Report generated",
-        description: "Your report is ready to review and download",
+        description: hasItems ? "Your report is ready to review and download" : "Report generated, but no content has been added yet",
       });
-    }, 2000);
+    }, 1500);
   };
   
   const downloadReport = () => {
-    // In a real app, we'd format the report properly and generate a PDF
-    // For this demo, we'll just show a toast
     toast({
       title: "Report downloaded",
       description: "Your report has been downloaded as PDF",
@@ -136,23 +111,15 @@ The limitations of this study include its relatively small sample size and relia
     }));
   };
   
-  const renderChart = () => {
-    if (!chartData || !chartData.data) return null;
+  const removeReportItem = (itemId: string) => {
+    const updatedItems = reportItems.filter(item => item.id !== itemId);
+    setReportItems(updatedItems);
+    localStorage.setItem('reportItems', JSON.stringify(updatedItems));
     
-    return (
-      <div className="h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData.data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="value" name={chartData.measure} fill="#4f46e5" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
+    toast({
+      title: "Item removed",
+      description: "The item has been removed from your report",
+    });
   };
   
   return (
@@ -168,7 +135,7 @@ The limitations of this study include its relatively small sample size and relia
             <div>
               <h1 className="text-3xl font-bold text-research-900 mb-2">Report Generation</h1>
               <p className="text-gray-600">
-                Generate a professional research report based on your analysis and visualization.
+                Generate a professional research report with your added content.
               </p>
             </div>
             
@@ -183,282 +150,259 @@ The limitations of this study include its relatively small sample size and relia
             )}
           </div>
           
-          {analysisResult ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Report settings */}
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle>Report Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="report-style">Report Style</Label>
-                    <Select value={reportStyle} onValueChange={(val) => setReportStyle(val as 'apa' | 'mla' | 'chicago')}>
-                      <SelectTrigger id="report-style">
-                        <SelectValue placeholder="Select style" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="apa">APA Style</SelectItem>
-                        <SelectItem value="mla">MLA Style</SelectItem>
-                        <SelectItem value="chicago">Chicago Style</SelectItem>
-                      </SelectContent>
-                    </Select>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Report settings */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle>Report Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="report-style">Report Style</Label>
+                  <Select value={reportStyle} onValueChange={(val) => setReportStyle(val as 'apa' | 'mla' | 'chicago')}>
+                    <SelectTrigger id="report-style">
+                      <SelectValue placeholder="Select style" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="apa">APA Style</SelectItem>
+                      <SelectItem value="mla">MLA Style</SelectItem>
+                      <SelectItem value="chicago">Chicago Style</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-3">
+                  <Label>Include Sections</Label>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="methods" 
+                      checked={reportSections.methods}
+                      onCheckedChange={() => toggleSection('methods')}
+                    />
+                    <Label htmlFor="methods">Methods</Label>
                   </div>
                   
-                  <div className="space-y-3">
-                    <Label>Include Sections</Label>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="introduction" 
-                        checked={reportSections.introduction} 
-                        onCheckedChange={() => toggleSection('introduction')}
-                      />
-                      <Label htmlFor="introduction">Introduction</Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="methods" 
-                        checked={reportSections.methods}
-                        onCheckedChange={() => toggleSection('methods')}
-                      />
-                      <Label htmlFor="methods">Methods</Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="results" 
-                        checked={reportSections.results}
-                        onCheckedChange={() => toggleSection('results')}
-                      />
-                      <Label htmlFor="results">Results</Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="discussion" 
-                        checked={reportSections.discussion}
-                        onCheckedChange={() => toggleSection('discussion')}
-                      />
-                      <Label htmlFor="discussion">Discussion</Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="references" 
-                        checked={reportSections.references}
-                        onCheckedChange={() => toggleSection('references')}
-                      />
-                      <Label htmlFor="references">References</Label>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="results" 
+                      checked={reportSections.results}
+                      onCheckedChange={() => toggleSection('results')}
+                    />
+                    <Label htmlFor="results">Results</Label>
                   </div>
                   
-                  {!reportGenerated ? (
-                    <Button 
-                      onClick={generateReport} 
-                      className="w-full mt-2 bg-research-700 hover:bg-research-800"
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? 'Generating...' : 'Generate Report'}
-                    </Button>
-                  ) : (
-                    <Button 
-                      onClick={generateReport}
-                      className="w-full mt-2"
-                      variant="outline"
-                    >
-                      Regenerate
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-              
-              {/* Report preview */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Report Preview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {reportGenerated ? (
-                    <Tabs defaultValue="preview" className="w-full">
-                      <TabsList className="mb-4">
-                        <TabsTrigger value="preview">Preview</TabsTrigger>
-                        <TabsTrigger value="edit">Edit</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="preview" className="space-y-6">
-                        {reportSections.introduction && (
-                          <div>
-                            <h2 className="text-xl font-bold mb-2">Introduction</h2>
-                            <div className="text-gray-800 space-y-2">
-                              {reportContent.introduction.split('\n').map((paragraph, i) => (
-                                <p key={i}>{paragraph}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {reportSections.methods && (
-                          <div>
-                            <h2 className="text-xl font-bold mb-2">Methods</h2>
-                            <div className="text-gray-800 space-y-2">
-                              {reportContent.methods.split('\n').map((paragraph, i) => (
-                                <p key={i}>{paragraph}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {reportSections.results && (
-                          <div>
-                            <h2 className="text-xl font-bold mb-2">Results</h2>
-                            <div className="text-gray-800 space-y-4">
-                              {reportContent.results.split('\n').map((paragraph, i) => (
-                                <p key={i}>{paragraph}</p>
-                              ))}
-                              
-                              {chartData && (
-                                <div className="my-4 border rounded-md p-4 bg-gray-50">
-                                  <p className="text-sm text-center mb-2 text-gray-500">
-                                    Figure 1: {chartData.measure} by {chartData.groupBy}
-                                  </p>
-                                  {renderChart()}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {reportSections.discussion && (
-                          <div>
-                            <h2 className="text-xl font-bold mb-2">Discussion</h2>
-                            <div className="text-gray-800 space-y-2">
-                              {reportContent.discussion.split('\n').map((paragraph, i) => (
-                                <p key={i}>{paragraph}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {reportSections.references && (
-                          <div>
-                            <h2 className="text-xl font-bold mb-2">References</h2>
-                            <div className="text-gray-800 font-mono text-sm">
-                              <pre className="whitespace-pre-wrap">{reportContent.references}</pre>
-                            </div>
-                          </div>
-                        )}
-                      </TabsContent>
-                      
-                      <TabsContent value="edit" className="space-y-6">
-                        {reportSections.introduction && (
-                          <div className="space-y-2">
-                            <Label htmlFor="introduction-text">Introduction</Label>
-                            <Textarea 
-                              id="introduction-text" 
-                              value={reportContent.introduction}
-                              onChange={(e) => setReportContent(prev => ({
-                                ...prev,
-                                introduction: e.target.value
-                              }))}
-                              rows={5}
-                            />
-                          </div>
-                        )}
-                        
-                        {reportSections.methods && (
-                          <div className="space-y-2">
-                            <Label htmlFor="methods-text">Methods</Label>
-                            <Textarea 
-                              id="methods-text" 
-                              value={reportContent.methods}
-                              onChange={(e) => setReportContent(prev => ({
-                                ...prev,
-                                methods: e.target.value
-                              }))}
-                              rows={5}
-                            />
-                          </div>
-                        )}
-                        
-                        {reportSections.results && (
-                          <div className="space-y-2">
-                            <Label htmlFor="results-text">Results</Label>
-                            <Textarea 
-                              id="results-text" 
-                              value={reportContent.results}
-                              onChange={(e) => setReportContent(prev => ({
-                                ...prev,
-                                results: e.target.value
-                              }))}
-                              rows={5}
-                            />
-                          </div>
-                        )}
-                        
-                        {reportSections.discussion && (
-                          <div className="space-y-2">
-                            <Label htmlFor="discussion-text">Discussion</Label>
-                            <Textarea 
-                              id="discussion-text" 
-                              value={reportContent.discussion}
-                              onChange={(e) => setReportContent(prev => ({
-                                ...prev,
-                                discussion: e.target.value
-                              }))}
-                              rows={5}
-                            />
-                          </div>
-                        )}
-                        
-                        {reportSections.references && (
-                          <div className="space-y-2">
-                            <Label htmlFor="references-text">References</Label>
-                            <Textarea 
-                              id="references-text" 
-                              value={reportContent.references}
-                              onChange={(e) => setReportContent(prev => ({
-                                ...prev,
-                                references: e.target.value
-                              }))}
-                              rows={5}
-                              className="font-mono"
-                            />
-                          </div>
-                        )}
-                      </TabsContent>
-                    </Tabs>
-                  ) : (
-                    <div className="py-20 text-center flex flex-col items-center text-muted-foreground">
-                      <FileText className="h-12 w-12 mb-4 opacity-20" />
-                      <p className="text-lg mb-2">No report generated yet</p>
-                      <p className="text-sm max-w-md mx-auto">
-                        Use the settings panel on the left to configure and generate your report.
-                      </p>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="interpretation" 
+                      checked={reportSections.interpretation}
+                      onCheckedChange={() => toggleSection('interpretation')}
+                    />
+                    <Label htmlFor="interpretation">Interpretation</Label>
+                  </div>
+                </div>
+                
+                {/* Added Content Summary */}
+                <div className="pt-4 border-t">
+                  <Label className="text-sm font-medium">Report Content ({reportItems.length} items)</Label>
+                  {reportItems.length > 0 ? (
+                    <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
+                      {reportItems.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                          <span className="truncate">{item.title}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeReportItem(item.id)}
+                            className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
                     </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-2">
+                      No content added yet. Use "Add to Report" in Visualization or Analysis modules.
+                    </p>
                   )}
-                </CardContent>
-              </Card>
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center flex flex-col items-center text-muted-foreground">
-                <AlertCircle className="h-10 w-10 mb-4 opacity-20" />
-                <p>No analysis results found. Please complete analysis first.</p>
-                <Button 
-                  onClick={() => navigate('/analysis')} 
-                  variant="outline" 
-                  className="mt-4"
-                >
-                  Go to Analysis
-                </Button>
+                </div>
+                
+                {!reportGenerated ? (
+                  <Button 
+                    onClick={generateReport} 
+                    className="w-full mt-4 bg-research-700 hover:bg-research-800"
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? 'Generating...' : 'Generate Report'}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={generateReport}
+                    className="w-full mt-4"
+                    variant="outline"
+                  >
+                    Regenerate
+                  </Button>
+                )}
               </CardContent>
             </Card>
-          )}
+            
+            {/* Report preview */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Report Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reportGenerated ? (
+                  <Tabs defaultValue="preview" className="w-full">
+                    <TabsList className="mb-4">
+                      <TabsTrigger value="preview">Preview</TabsTrigger>
+                      <TabsTrigger value="edit">Edit</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="preview" className="space-y-6">
+                      {reportItems.length === 0 ? (
+                        <div className="py-12 text-center">
+                          <Plus className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No results added yet</h3>
+                          <p className="text-gray-500 max-w-md mx-auto">
+                            Go to the Visualization or Analysis modules and click 'Add to Report' to build your report.
+                          </p>
+                          <div className="flex gap-2 justify-center mt-4">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => navigate('/visualization')}
+                            >
+                              Go to Visualization
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => navigate('/analysis')}
+                            >
+                              Go to Analysis
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {reportSections.methods && (
+                            <div>
+                              <h2 className="text-xl font-bold mb-2">Methods</h2>
+                              <div className="text-gray-800 space-y-2">
+                                {reportContent.methods.split('\n').map((paragraph, i) => (
+                                  <p key={i}>{paragraph}</p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {reportSections.results && (
+                            <div>
+                              <h2 className="text-xl font-bold mb-2">Results</h2>
+                              <div className="text-gray-800 space-y-4">
+                                {reportContent.results.split('\n').map((paragraph, i) => (
+                                  <p key={i}>{paragraph}</p>
+                                ))}
+                                
+                                {/* Display added report items */}
+                                {reportItems.map((item, index) => (
+                                  <div key={item.id} className="my-6 border rounded-md p-4 bg-gray-50">
+                                    <p className="text-sm text-center mb-2 text-gray-500">
+                                      Figure {index + 1}: {item.title}
+                                    </p>
+                                    {item.caption && (
+                                      <p className="text-xs text-center text-gray-400 mb-2">
+                                        {item.caption}
+                                      </p>
+                                    )}
+                                    <div className="bg-white p-4 rounded border">
+                                      <p className="text-sm text-gray-600 text-center">
+                                        [{item.type.charAt(0).toUpperCase() + item.type.slice(1)} content would be displayed here]
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {reportSections.interpretation && (
+                            <div>
+                              <h2 className="text-xl font-bold mb-2">Interpretation</h2>
+                              <div className="text-gray-800 space-y-2">
+                                {reportContent.interpretation.split('\n').map((paragraph, i) => (
+                                  <p key={i}>{paragraph}</p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="edit" className="space-y-6">
+                      {reportSections.methods && (
+                        <div className="space-y-2">
+                          <Label htmlFor="methods-text">Methods</Label>
+                          <Textarea 
+                            id="methods-text" 
+                            value={reportContent.methods}
+                            onChange={(e) => setReportContent(prev => ({
+                              ...prev,
+                              methods: e.target.value
+                            }))}
+                            rows={5}
+                          />
+                        </div>
+                      )}
+                      
+                      {reportSections.results && (
+                        <div className="space-y-2">
+                          <Label htmlFor="results-text">Results</Label>
+                          <Textarea 
+                            id="results-text" 
+                            value={reportContent.results}
+                            onChange={(e) => setReportContent(prev => ({
+                              ...prev,
+                              results: e.target.value
+                            }))}
+                            rows={5}
+                          />
+                        </div>
+                      )}
+                      
+                      {reportSections.interpretation && (
+                        <div className="space-y-2">
+                          <Label htmlFor="interpretation-text">Interpretation</Label>
+                          <Textarea 
+                            id="interpretation-text" 
+                            value={reportContent.interpretation}
+                            onChange={(e) => setReportContent(prev => ({
+                              ...prev,
+                              interpretation: e.target.value
+                            }))}
+                            rows={5}
+                          />
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                ) : (
+                  <div className="py-20 text-center flex flex-col items-center text-muted-foreground">
+                    <FileText className="h-12 w-12 mb-4 opacity-20" />
+                    <p className="text-lg mb-2">No report generated yet</p>
+                    <p className="text-sm max-w-md mx-auto">
+                      Use the settings panel on the left to configure and generate your report.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </DashboardLayout>
