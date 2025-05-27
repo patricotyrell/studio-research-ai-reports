@@ -186,7 +186,10 @@ const UploadData = () => {
       columns: processedData.variables.length
     };
     
-    // Create and save the project (only essential data)
+    // Clear any existing project data before creating new project
+    clearAllProjectData();
+    
+    // Create and save the project with complete isolation
     try {
       createProject(projectName, fileInfo, {
         variables: processedData.variables,

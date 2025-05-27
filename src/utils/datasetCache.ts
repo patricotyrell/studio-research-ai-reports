@@ -9,13 +9,14 @@ interface DatasetCache {
     totalRows: number;
     totalColumns: number;
     uploadedAt: string;
+    projectId?: string; // Add project ID for isolation
   } | null;
-  originalRows: any[]; // Keep original data for reset purposes
-  originalVariables: DataVariable[]; // Keep original variables
-  // Track preparation changes for consistency
+  originalRows: any[];
+  originalVariables: DataVariable[];
   prepChanges: {
     [stepName: string]: any;
   };
+  projectId: string | null; // Track which project this cache belongs to
 }
 
 // Single source of truth for dataset
@@ -25,29 +26,63 @@ let datasetCache: DatasetCache = {
   metadata: null,
   originalRows: [],
   originalVariables: [],
-  prepChanges: {}
+  prepChanges: {},
+  projectId: null
+};
+
+// Helper function to get current project ID
+const getCurrentProjectId = (): string | null => {
+  try {
+    const currentProject = localStorage.getItem('currentProject');
+    const currentFile = localStorage.getItem('currentFile');
+    
+    if (currentProject) {
+      const project = JSON.parse(currentProject);
+      return project.id;
+    }
+    
+    if (currentFile) {
+      const file = JSON.parse(currentFile);
+      return file.projectId || file.name; // Fallback to filename if no project ID
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn('Error getting current project ID:', e);
+    return null;
+  }
+};
+
+// Check if cache belongs to current project
+const isCacheValidForCurrentProject = (): boolean => {
+  const currentProjectId = getCurrentProjectId();
+  return currentProjectId !== null && datasetCache.projectId === currentProjectId;
 };
 
 // Store the complete dataset in memory
 export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata: any) => {
-  console.log('Setting dataset cache:', {
+  const currentProjectId = getCurrentProjectId();
+  
+  console.log('Setting dataset cache for project:', currentProjectId, {
     rows: rows.length,
     variables: variables.length,
     metadata
   });
   
   datasetCache = {
-    allRows: [...rows], // Copy arrays to avoid mutation
+    allRows: [...rows],
     variables: [...variables],
-    metadata,
-    originalRows: [...rows], // Store original data
+    metadata: { ...metadata, projectId: currentProjectId },
+    originalRows: [...rows],
     originalVariables: [...variables],
-    prepChanges: {} // Reset prep changes when setting new data
+    prepChanges: {},
+    projectId: currentProjectId
   };
   
-  // Also store basic info in localStorage for persistence
+  // Store basic info in localStorage with project isolation
   try {
-    localStorage.setItem('datasetMetadata', JSON.stringify(metadata));
+    const storageKey = `datasetMetadata_${currentProjectId}`;
+    localStorage.setItem(storageKey, JSON.stringify(metadata));
   } catch (e) {
     console.warn('Could not save metadata to localStorage:', e);
   }
@@ -55,24 +90,29 @@ export const setDatasetCache = (rows: any[], variables: DataVariable[], metadata
 
 // Update dataset with modified data (for data prep steps)
 export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepName?: string, changes?: any) => {
-  console.log('Updating dataset cache with modified data:', {
+  const currentProjectId = getCurrentProjectId();
+  
+  // Ensure we're updating the correct project's cache
+  if (!isCacheValidForCurrentProject()) {
+    console.warn('Cache project mismatch, clearing cache');
+    clearDatasetCache();
+    return;
+  }
+  
+  console.log('Updating dataset cache for project:', currentProjectId, {
     rows: rows.length,
     variables: variables.length,
     stepName,
     changes
   });
   
-  // Update the current state but preserve original data
   datasetCache.allRows = [...rows];
   datasetCache.variables = [...variables];
   
-  // Store the changes for this step
   if (stepName && changes) {
     datasetCache.prepChanges[stepName] = changes;
-    console.log('Stored prep changes for step:', stepName, changes);
   }
   
-  // Update metadata row count if changed
   if (datasetCache.metadata) {
     datasetCache.metadata = {
       ...datasetCache.metadata,
@@ -81,9 +121,10 @@ export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepN
     };
   }
   
-  // Persist the updated state to localStorage
+  // Persist with project isolation
   try {
-    localStorage.setItem('currentDatasetState', JSON.stringify({
+    const storageKey = `currentDatasetState_${currentProjectId}`;
+    localStorage.setItem(storageKey, JSON.stringify({
       variables: datasetCache.variables,
       prepChanges: datasetCache.prepChanges,
       metadata: datasetCache.metadata
@@ -93,8 +134,14 @@ export const updateDatasetCache = (rows: any[], variables: DataVariable[], stepN
   }
 };
 
-// Reset to original data (useful for starting fresh)
+// Reset to original data
 export const resetDatasetCache = () => {
+  if (!isCacheValidForCurrentProject()) {
+    console.warn('Cache project mismatch, clearing cache');
+    clearDatasetCache();
+    return;
+  }
+  
   console.log('Resetting dataset cache to original data');
   datasetCache.allRows = [...datasetCache.originalRows];
   datasetCache.variables = [...datasetCache.originalVariables];
@@ -108,94 +155,160 @@ export const resetDatasetCache = () => {
     };
   }
   
-  // Clear persisted state
-  localStorage.removeItem('currentDatasetState');
+  // Clear persisted state for current project
+  const currentProjectId = getCurrentProjectId();
+  if (currentProjectId) {
+    localStorage.removeItem(`currentDatasetState_${currentProjectId}`);
+  }
 };
 
-// Get dataset variables (always return current state)
+// Get dataset variables with project validation
 export const getDatasetVariables = (): DataVariable[] => {
-  return [...datasetCache.variables]; // Return copy to prevent mutation
+  if (!isCacheValidForCurrentProject()) {
+    console.log('Cache invalid for current project, returning empty array');
+    return [];
+  }
+  return [...datasetCache.variables];
 };
 
-// Get paginated rows
+// Get paginated rows with project validation
 export const getDatasetRows = (page: number = 0, rowsPerPage: number = 10): any[] => {
+  if (!isCacheValidForCurrentProject()) {
+    console.log('Cache invalid for current project, returning empty array');
+    return [];
+  }
+  
   const startIndex = page * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
-  
-  console.log(`Getting rows ${startIndex} to ${endIndex} from cache:`, {
-    totalRows: datasetCache.allRows.length,
-    requestedPage: page,
-    rowsPerPage
-  });
   
   return datasetCache.allRows.slice(startIndex, endIndex);
 };
 
-// Get preview rows (first 5)
+// Get preview rows with project validation
 export const getDatasetPreviewRows = (): any[] => {
+  if (!isCacheValidForCurrentProject()) {
+    return [];
+  }
   return datasetCache.allRows.slice(0, 5);
 };
 
-// Get all rows (for processing)
+// Get all rows with project validation
 export const getAllDatasetRows = (): any[] => {
-  return [...datasetCache.allRows]; // Return copy to prevent mutation
+  if (!isCacheValidForCurrentProject()) {
+    return [];
+  }
+  return [...datasetCache.allRows];
 };
 
-// Get total row count
+// Get total row count with project validation
 export const getDatasetRowCount = (): number => {
+  if (!isCacheValidForCurrentProject()) {
+    return 0;
+  }
   return datasetCache.allRows.length;
 };
 
-// Get dataset metadata
+// Get dataset metadata with project validation
 export const getDatasetMetadata = () => {
+  if (!isCacheValidForCurrentProject()) {
+    return null;
+  }
   return datasetCache.metadata;
 };
 
-// Get preparation changes for a specific step
+// Get preparation changes with project validation
 export const getPrepChanges = (stepName?: string) => {
+  if (!isCacheValidForCurrentProject()) {
+    return stepName ? undefined : {};
+  }
+  
   if (stepName) {
     return datasetCache.prepChanges[stepName];
   }
   return datasetCache.prepChanges;
 };
 
-// Check if dataset is loaded
+// Check if dataset is loaded and valid for current project
 export const isDatasetLoaded = (): boolean => {
-  return datasetCache.allRows.length > 0 && datasetCache.variables.length > 0;
+  return isCacheValidForCurrentProject() && 
+         datasetCache.allRows.length > 0 && 
+         datasetCache.variables.length > 0;
 };
 
-// Clear the cache
+// Clear the cache completely
 export const clearDatasetCache = () => {
-  console.log('Clearing dataset cache');
+  const oldProjectId = datasetCache.projectId;
+  console.log('Clearing dataset cache for project:', oldProjectId);
+  
   datasetCache = {
     allRows: [],
     variables: [],
     metadata: null,
     originalRows: [],
     originalVariables: [],
-    prepChanges: {}
+    prepChanges: {},
+    projectId: null
   };
+  
+  // Clear all project-specific localStorage items
+  if (oldProjectId) {
+    localStorage.removeItem(`datasetMetadata_${oldProjectId}`);
+    localStorage.removeItem(`currentDatasetState_${oldProjectId}`);
+  }
+  
+  // Also clear legacy items
   localStorage.removeItem('datasetMetadata');
   localStorage.removeItem('currentDatasetState');
 };
 
-// Restore dataset state from localStorage (for persistence across page loads)
+// Clear cache for a specific project
+export const clearProjectCache = (projectId: string) => {
+  console.log('Clearing cache for specific project:', projectId);
+  
+  // If it's the current project's cache, clear it
+  if (datasetCache.projectId === projectId) {
+    clearDatasetCache();
+  }
+  
+  // Clear localStorage items for this project
+  localStorage.removeItem(`datasetMetadata_${projectId}`);
+  localStorage.removeItem(`currentDatasetState_${projectId}`);
+  localStorage.removeItem(`reportItems_${projectId}`);
+  localStorage.removeItem(`completedPrepSteps_${projectId}`);
+  localStorage.removeItem(`preparedVariables_${projectId}`);
+  localStorage.removeItem(`preparedDataRows_${projectId}`);
+};
+
+// Restore dataset state from localStorage with project isolation
 export const restoreDatasetState = () => {
+  const currentProjectId = getCurrentProjectId();
+  if (!currentProjectId) {
+    console.log('No current project ID, cannot restore state');
+    return false;
+  }
+  
   try {
-    const savedState = localStorage.getItem('currentDatasetState');
+    const storageKey = `currentDatasetState_${currentProjectId}`;
+    const savedState = localStorage.getItem(storageKey);
+    
     if (savedState) {
       const { variables, prepChanges, metadata } = JSON.parse(savedState);
       if (variables && Array.isArray(variables)) {
-        datasetCache.variables = variables;
-        datasetCache.prepChanges = prepChanges || {};
-        if (metadata) {
-          datasetCache.metadata = metadata;
+        // Only restore if the cache is empty or belongs to a different project
+        if (!isDatasetLoaded() || datasetCache.projectId !== currentProjectId) {
+          datasetCache.variables = variables;
+          datasetCache.prepChanges = prepChanges || {};
+          datasetCache.projectId = currentProjectId;
+          if (metadata) {
+            datasetCache.metadata = metadata;
+          }
+          
+          console.log('Restored dataset state for project:', currentProjectId, {
+            variables: variables.length,
+            prepChanges: Object.keys(prepChanges || {})
+          });
+          return true;
         }
-        console.log('Restored dataset state from localStorage:', {
-          variables: variables.length,
-          prepChanges: Object.keys(prepChanges || {})
-        });
-        return true;
       }
     }
   } catch (e) {
@@ -204,19 +317,20 @@ export const restoreDatasetState = () => {
   return false;
 };
 
-// Initialize cache from sample data (for demo mode)
+// Initialize cache from sample data with project isolation
 export const initializeSampleDataCache = (sampleData: any) => {
   if (sampleData?.variables && sampleData?.previewRows) {
+    const currentProjectId = getCurrentProjectId();
+    
     // Generate extended rows for sample data
     const extendedRows = [];
     const baseRows = sampleData.previewRows;
-    const totalToGenerate = 100; // Generate 100 sample rows
+    const totalToGenerate = 100;
     
     for (let i = 0; i < totalToGenerate; i++) {
       const baseRow = baseRows[i % baseRows.length];
       const modifiedRow = { ...baseRow };
       
-      // Modify IDs and names to create unique rows
       Object.keys(modifiedRow).forEach(key => {
         if (modifiedRow[key] && typeof modifiedRow[key] === 'string') {
           if (key.toLowerCase().includes('id')) {
@@ -232,7 +346,8 @@ export const initializeSampleDataCache = (sampleData: any) => {
       fileName: 'Sample Dataset',
       totalRows: extendedRows.length,
       totalColumns: sampleData.variables.length,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      projectId: currentProjectId
     });
   }
 };
