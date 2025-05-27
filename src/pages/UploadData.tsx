@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileText, AlertCircle } from 'lucide-react';
-import { processFileData, createProject } from '@/utils/dataUtils';
+import { processFileData, createProject, clearAllProjectData } from '@/utils/dataUtils';
 import { getExcelSheetInfo } from '@/utils/excelUtils';
 
 interface SheetInfo {
