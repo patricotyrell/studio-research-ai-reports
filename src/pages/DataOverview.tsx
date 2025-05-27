@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import StepIndicator from '@/components/StepIndicator';
 import PaginatedDataPreview from '@/components/PaginatedDataPreview';
 import DataQualityChecks from '@/components/DataQualityChecks';
+import AutoDataPreview from '@/components/AutoDataPreview';
 import { CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { getDatasetVariables, getCurrentFile, getCurrentProject } from '@/utils/dataUtils';
 import { getDatasetPreviewRows } from '@/utils/dataUtils';
@@ -197,6 +198,9 @@ const DataOverview = () => {
               </ScrollArea>
             </CardContent>
           </Card>
+          
+          {/* Auto-Generated Data Preview Charts */}
+          <AutoDataPreview columns={columns} />
           
           {/* Data Preview */}
           <div className="mb-6">
