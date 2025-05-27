@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -12,6 +11,7 @@ import AnalysisVariableSelector from '@/components/analysis/AnalysisVariableSele
 import TestSelector from '@/components/analysis/TestSelector';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
 import { getDatasetVariables } from '@/utils/dataUtils';
+import { runStatisticalAnalysis, StatisticalTestResult } from '@/services/statisticalTestsService';
 
 type AnalysisIntent = 'distribution' | 'relationship' | 'comparison';
 
@@ -51,7 +51,7 @@ const Analysis = () => {
   const [testSelectionMode, setTestSelectionMode] = useState<'auto' | 'manual'>('auto');
   const [selectedTest, setSelectedTest] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<StatisticalTestResult | null>(null);
   
   useEffect(() => {
     // Check if user is logged in and has current file
@@ -118,7 +118,7 @@ const Analysis = () => {
     }
   };
 
-  const runAnalysis = () => {
+  const runAnalysis = async () => {
     if (!firstVariable || (analysisIntent !== 'distribution' && !secondVariable)) {
       toast({
         title: "Variables required",
@@ -130,119 +130,71 @@ const Analysis = () => {
 
     setIsAnalyzing(true);
     
-    // Simulate API call with timeout
-    setTimeout(() => {
-      const firstVar = variables.find(v => v.name === firstVariable);
-      const secondVar = variables.find(v => v.name === secondVariable);
+    try {
+      // Determine the test to run
+      let testToRun = selectedTest;
       
-      let mockResult: AnalysisResult;
-      
-      if (analysisIntent === 'distribution') {
-        if (firstVar?.type === 'categorical') {
-          mockResult = {
-            type: 'Frequency Analysis',
-            description: `Frequency distribution analysis of ${firstVariable}`,
-            pValue: 0.0,
-            significant: true,
-            statistic: 0,
-            interpretation: `The frequency analysis of ${firstVariable} shows the distribution of categories. The most common category represents the modal value in your dataset.`,
-            testSummary: {
-              statistic: 0,
-              pValue: 0.0,
-            }
-          };
-        } else {
-          mockResult = {
-            type: 'Normality Test (Shapiro-Wilk)',
-            description: `Testing normality of ${firstVariable} distribution`,
-            pValue: 0.034,
-            significant: true,
-            statistic: 0.94,
-            interpretation: `The Shapiro-Wilk test indicates that ${firstVariable} does not follow a normal distribution (W = 0.94, p = 0.034). Consider using non-parametric tests for further analysis.`,
-            testSummary: {
-              statistic: 0.94,
-              pValue: 0.034,
-            }
-          };
-        }
-      } else if (analysisIntent === 'comparison' && firstVar?.type === 'categorical' && secondVar?.type === 'numeric') {
-        if (firstVar.unique <= 2) {
-          mockResult = {
-            type: 'Independent Samples T-test',
-            description: `Comparing ${secondVariable} across ${firstVariable} groups`,
-            pValue: 0.023,
-            significant: true,
-            statistic: 2.34,
-            degreesOfFreedom: 98,
-            effectSize: 0.47,
-            interpretation: `There is a statistically significant difference in ${secondVariable} between ${firstVariable} groups (t(98) = 2.34, p = 0.023, Cohen's d = 0.47). This represents a medium effect size, suggesting meaningful practical differences.`,
-            testSummary: {
-              statistic: 2.34,
-              pValue: 0.023,
-              degreesOfFreedom: 98,
-              effectSize: 0.47,
-              confidenceInterval: [0.12, 1.86]
-            }
-          };
-        } else {
-          mockResult = {
-            type: 'One-way ANOVA',
-            description: `Comparing ${secondVariable} across multiple ${firstVariable} groups`,
-            pValue: 0.012,
-            significant: true,
-            statistic: 4.83,
-            degreesOfFreedom: 2,
-            effectSize: 0.23,
-            interpretation: `There is a statistically significant difference in ${secondVariable} across ${firstVariable} groups (F(2,97) = 4.83, p = 0.012, η² = 0.23). Post-hoc tests are recommended to identify which specific groups differ.`,
-            testSummary: {
-              statistic: 4.83,
-              pValue: 0.012,
-              degreesOfFreedom: 2,
-              effectSize: 0.23
-            }
-          };
-        }
-      } else if (analysisIntent === 'relationship' && firstVar?.type === 'numeric' && secondVar?.type === 'numeric') {
-        mockResult = {
-          type: 'Pearson Correlation',
-          description: `Correlation analysis between ${firstVariable} and ${secondVariable}`,
-          pValue: 0.002,
-          significant: true,
-          statistic: 0.56,
-          degreesOfFreedom: 98,
-          interpretation: `There is a moderately strong positive correlation between ${firstVariable} and ${secondVariable} (r(98) = 0.56, p = 0.002). This suggests that as ${firstVariable} increases, ${secondVariable} tends to increase as well.`,
-          testSummary: {
-            statistic: 0.56,
-            pValue: 0.002,
-            degreesOfFreedom: 98,
-            confidenceInterval: [0.21, 0.78]
+      if (testSelectionMode === 'auto' || !testToRun) {
+        // Auto-select based on variable types and intent
+        const firstVar = variables.find(v => v.name === firstVariable);
+        const secondVar = variables.find(v => v.name === secondVariable);
+        
+        if (analysisIntent === 'distribution') {
+          if (firstVar?.type === 'categorical') {
+            testToRun = 'frequency-test';
+          } else if (firstVar?.type === 'numeric') {
+            testToRun = 'normality-test';
           }
-        };
-      } else {
-        mockResult = {
-          type: 'Chi-square Test of Independence',
-          description: `Testing independence between ${firstVariable} and ${secondVariable}`,
-          pValue: 0.047,
-          significant: true,
-          statistic: 9.65,
-          degreesOfFreedom: 4,
-          interpretation: `There is a statistically significant relationship between ${firstVariable} and ${secondVariable} (χ²(4) = 9.65, p = 0.047). These variables are not independent of each other.`,
-          testSummary: {
-            statistic: 9.65,
-            pValue: 0.047,
-            degreesOfFreedom: 4
+        } else if (analysisIntent === 'comparison' && firstVar && secondVar) {
+          if (firstVar.type === 'categorical' && secondVar.type === 'numeric') {
+            testToRun = firstVar.unique <= 2 ? 'independent-t-test' : 'one-way-anova';
+          } else if (firstVar.type === 'numeric' && secondVar.type === 'categorical') {
+            testToRun = secondVar.unique <= 2 ? 'independent-t-test' : 'one-way-anova';
           }
-        };
+        } else if (analysisIntent === 'relationship' && firstVar && secondVar) {
+          if (firstVar.type === 'numeric' && secondVar.type === 'numeric') {
+            testToRun = 'pearson-correlation';
+          } else if (firstVar.type === 'categorical' && secondVar.type === 'categorical') {
+            testToRun = 'chi-square';
+          }
+        }
       }
       
-      setAnalysisResult(mockResult);
-      setIsAnalyzing(false);
+      if (!testToRun) {
+        throw new Error('Unable to determine appropriate statistical test');
+      }
+      
+      console.log(`Running analysis: ${testToRun} with variables:`, {
+        primary: firstVariable,
+        secondary: secondVariable,
+        intent: analysisIntent
+      });
+      
+      // Run the actual statistical analysis
+      const result = await runStatisticalAnalysis(
+        analysisIntent,
+        testToRun,
+        firstVariable,
+        secondVariable
+      );
+      
+      setAnalysisResult(result);
       
       toast({
         title: "Analysis complete",
-        description: "Your results are ready to review",
+        description: "Your statistical analysis results are ready to review",
       });
-    }, 1500);
+      
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast({
+        title: "Analysis failed",
+        description: error instanceof Error ? error.message : "An error occurred during analysis",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleDownloadResults = () => {
@@ -313,9 +265,9 @@ const Analysis = () => {
         <div className="max-w-4xl mx-auto mt-6">
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-research-900 mb-2">Analysis</h1>
+              <h1 className="text-3xl font-bold text-research-900 mb-2">Statistical Analysis</h1>
               <p className="text-gray-600">
-                Select variables and run appropriate statistical tests to analyze your data.
+                Select variables and run statistical tests on your actual dataset to analyze relationships and patterns.
               </p>
             </div>
           </div>
@@ -352,7 +304,7 @@ const Analysis = () => {
           {canRunAnalysis() && (
             <Card className="mb-6">
               <div className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Test Selection</h3>
+                <h3 className="text-lg font-semibold mb-4">Statistical Test Selection</h3>
                 <TestSelector
                   analysisIntent={analysisIntent}
                   firstVariable={firstVariable}
@@ -369,27 +321,28 @@ const Analysis = () => {
                   className="w-full mt-6 bg-research-700 hover:bg-research-800"
                   disabled={isAnalyzing}
                 >
-                  {isAnalyzing ? 'Running Analysis...' : 'Run Analysis'}
+                  {isAnalyzing ? 'Running Statistical Analysis...' : 'Run Analysis'}
                 </Button>
               </div>
             </Card>
           )}
 
-          {/* Step 4: Results */}
+          {/* Step 4: Analysis Progress */}
           {isAnalyzing && (
             <Card className="mb-6">
               <div className="p-6">
                 <div className="py-10 text-center">
-                  <p className="mb-4 text-muted-foreground">Running statistical analysis...</p>
-                  <Progress value={65} className="mb-2" />
+                  <p className="mb-4 text-muted-foreground">Computing statistical analysis on your dataset...</p>
+                  <Progress value={75} className="mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    Please wait while we process your data
+                    Performing calculations and assumption checks
                   </p>
                 </div>
               </div>
             </Card>
           )}
 
+          {/* Step 5: Results */}
           {analysisResult && (
             <div className="space-y-6">
               <AnalysisResults
