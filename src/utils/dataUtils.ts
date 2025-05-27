@@ -1,4 +1,3 @@
-
 import { sampleDatasets, getSampleDataset, DataVariable } from '../services/sampleDataService';
 import { parseExcelFile, ExcelParseResult } from './excelUtils';
 import { 
@@ -13,9 +12,8 @@ import {
   getPrepChanges,
   isDatasetLoaded,
   clearDatasetCache,
-  clearProjectCache,
-  restoreDatasetState as restoreDatasetStateFromCache,
-  initializeSampleDataCache as initSampleDataCache
+  restoreDatasetState,
+  initializeSampleDataCache
 } from './datasetCache';
 
 // Helper function to check if a value is numeric
@@ -78,37 +76,9 @@ const analyzeVariable = (header: string, values: any[]): DataVariable => {
   return result;
 };
 
-// Helper function to get current project ID
-const getCurrentProjectId = (): string | null => {
-  try {
-    const currentProject = localStorage.getItem('currentProject');
-    const currentFile = localStorage.getItem('currentFile');
-    
-    if (currentProject) {
-      const project = JSON.parse(currentProject);
-      return project.id;
-    }
-    
-    if (currentFile) {
-      const file = JSON.parse(currentFile);
-      return file.projectId || file.name;
-    }
-    
-    return null;
-  } catch (e) {
-    console.warn('Error getting current project ID:', e);
-    return null;
-  }
-};
-
 // Helper function to check if in demo mode
 export const isDemoMode = () => {
   return localStorage.getItem('isDemoMode') === 'true';
-};
-
-// Helper function to clear demo mode
-export const clearDemoMode = () => {
-  localStorage.removeItem('isDemoMode');
 };
 
 // Helper function to check if current file is sample data
@@ -132,15 +102,6 @@ export const getCurrentProject = () => {
   if (!projectData) return null;
   
   return JSON.parse(projectData);
-};
-
-// Update project name
-export const updateProjectName = (newName: string) => {
-  const currentProject = getCurrentProject();
-  if (currentProject) {
-    const updatedProject = { ...currentProject, name: newName, updatedAt: new Date().toISOString() };
-    saveProject(updatedProject);
-  }
 };
 
 // Save project information (disabled in demo mode)
@@ -194,77 +155,61 @@ export const createProject = (projectName: string, fileData: any, processedData?
     processedData: processedData || {}
   };
   
-  // Clear any existing data first
-  clearAllProjectData();
-  
   // Save as current project and to past projects
   saveProject(project);
   
   return project;
 };
 
-// Enhanced project deletion with complete cleanup
-export const deleteProject = (projectId: string) => {
-  console.log('Deleting project:', projectId);
+// Update project name (disabled in demo mode)
+export const updateProjectName = (newName: string) => {
+  if (isDemoMode()) return;
   
-  // Clear all project-specific data
-  clearAllProjectData(projectId);
-  
-  // Remove from past projects list
-  const pastProjects = getPastProjects();
-  const updatedProjects = pastProjects.filter(p => p.id !== projectId);
-  localStorage.setItem('pastProjects', JSON.stringify(updatedProjects));
-  
-  // If it's the current project, clear current project data
-  const currentProject = getCurrentProject();
-  if (currentProject && currentProject.id === projectId) {
-    localStorage.removeItem('currentProject');
-    localStorage.removeItem('currentFile');
-    localStorage.removeItem('processedData');
-    localStorage.removeItem('isSampleData');
+  const project = getCurrentProject();
+  if (project) {
+    project.name = newName;
+    project.updatedAt = new Date().toISOString();
+    saveProject(project);
   }
 };
 
-// Switch to a different project with complete isolation
-export const switchToProject = (project: any) => {
-  console.log('Switching to project:', project.id);
+// Update project with new data (disabled in demo mode)
+export const updateProject = (updates: any) => {
+  if (isDemoMode()) return null;
   
-  // Clear current project data first
-  const currentProject = getCurrentProject();
-  if (currentProject && currentProject.id !== project.id) {
-    clearAllProjectData(currentProject.id);
+  const project = getCurrentProject();
+  if (project) {
+    const updatedProject = { 
+      ...project, 
+      ...updates, 
+      updatedAt: new Date().toISOString() 
+    };
+    saveProject(updatedProject);
+    return updatedProject;
   }
-  
-  // Set new project as current
-  localStorage.setItem('currentProject', JSON.stringify(project));
-  if (project.fileData) {
-    localStorage.setItem('currentFile', JSON.stringify(project.fileData));
-    localStorage.setItem('processedData', JSON.stringify(project.processedData || {}));
-    localStorage.setItem('isSampleData', project.fileData.id ? 'true' : 'false');
-  }
-  
-  // Clear the dataset cache to force reload
-  clearDatasetCache();
+  return null;
 };
 
-// Save preparation step completion with project isolation
+// Clear demo mode data
+export const clearDemoMode = () => {
+  localStorage.removeItem('isDemoMode');
+  localStorage.removeItem('isSampleData');
+  localStorage.removeItem('currentFile');
+  localStorage.removeItem('processedData');
+  localStorage.removeItem('completedPrepSteps');
+  localStorage.removeItem('preparedVariables');
+};
+
+// Save preparation step completion status
 export const saveStepCompletion = (step: string, completed: boolean) => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
-  
-  const storageKey = `completedPrepSteps_${projectId}`;
   const currentSteps = getCompletedSteps();
   currentSteps[step] = completed;
-  localStorage.setItem(storageKey, JSON.stringify(currentSteps));
+  localStorage.setItem('completedPrepSteps', JSON.stringify(currentSteps));
 };
 
-// Get preparation steps with project isolation
+// Get preparation step completion statuses
 export const getCompletedSteps = () => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
-  
-  const storageKey = `completedPrepSteps_${projectId}`;
-  const stepsData = localStorage.getItem(storageKey);
+  const stepsData = localStorage.getItem('completedPrepSteps');
   if (!stepsData) {
     return {
       missingValues: false,
@@ -279,170 +224,608 @@ export const getCompletedSteps = () => {
   return JSON.parse(stepsData);
 };
 
-// Save prepared variables with project isolation
-export const savePreparedVariables = (variables: DataVariable[]) => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
+// Enhanced process file data with unified cache storage
+export const processFileData = async (file: File, selectedSheet?: string): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  const fileName = file.name.toLowerCase();
+  const isCSV = fileName.endsWith('.csv');
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
   
-  const storageKey = `preparedVariables_${projectId}`;
-  localStorage.setItem(storageKey, JSON.stringify(variables));
+  if (!isCSV && !isExcel) {
+    throw new Error('Unsupported file format. Please upload a CSV or Excel file.');
+  }
+  
+  console.log('Processing file:', fileName, 'Size:', file.size);
+  
+  let result: { variables: DataVariable[], previewRows: any[], totalRows: number };
+  
+  if (isExcel) {
+    const excelResult = await parseExcelFile(file, selectedSheet);
+    result = {
+      variables: excelResult.variables,
+      previewRows: excelResult.previewRows,
+      totalRows: excelResult.totalRows
+    };
+    
+    // For Excel, parseExcelFile already returns all rows in previewRows
+    const metadata = {
+      fileName: file.name,
+      totalRows: excelResult.totalRows,
+      totalColumns: excelResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(excelResult.previewRows, excelResult.variables, metadata);
+  } else {
+    // For CSV, get all rows and store in cache
+    const allRows = await getAllCSVRows(file);
+    const csvResult = await processCSVDataOptimized(file);
+    
+    const metadata = {
+      fileName: file.name,
+      totalRows: allRows.length,
+      totalColumns: csvResult.variables.length,
+      uploadedAt: new Date().toISOString()
+    };
+    
+    setDatasetCache(allRows, csvResult.variables, metadata);
+    
+    result = {
+      variables: csvResult.variables,
+      previewRows: allRows.slice(0, 5),
+      totalRows: allRows.length
+    };
+  }
+  
+  console.log('Dataset cached successfully:', {
+    totalRows: result.totalRows,
+    variables: result.variables.length
+  });
+  
+  return result;
 };
 
-// Get prepared variables with project isolation
-export const getPreparedVariables = () => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
+// Helper function to get all CSV rows (not just preview)
+const getAllCSVRows = async (file: File): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        if (lines.length < 2) {
+          reject(new Error('File must contain at least a header row and one data row'));
+          return;
+        }
+        
+        // Parse header
+        const headers = parseCSVLine(lines[0]);
+        
+        // Process all rows
+        const allRows = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            allRows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i}:`, lineError);
+          }
+        }
+        
+        resolve(allRows);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
+// Helper function to properly parse CSV lines with quoted fields
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
   
-  const storageKey = `preparedVariables_${projectId}`;
-  const variablesData = localStorage.getItem(storageKey);
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(field => field.replace(/^"|"$/g, ''));
+};
+
+// Enhanced CSV processing with improved type detection
+export const processCSVDataOptimized = async (file: File): Promise<{ variables: DataVariable[], previewRows: any[], totalRows: number }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        if (lines.length < 2) {
+          reject(new Error('File must contain at least a header row and one data row'));
+          return;
+        }
+        
+        // Parse header
+        const headers = parseCSVLine(lines[0]);
+        console.log('CSV headers found:', headers.length);
+        
+        // Process all rows
+        const allRows = [];
+        
+        console.log('Processing', lines.length - 1, 'data rows');
+        
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i]);
+            const row: any = {};
+            headers.forEach((header, index) => {
+              const value = values[index] || null;
+              row[header] = value === '' ? null : value;
+            });
+            allRows.push(row);
+          } catch (lineError) {
+            console.warn(`Error parsing line ${i}:`, lineError);
+          }
+        }
+        
+        console.log('Successfully processed', allRows.length, 'rows');
+        
+        // Analyze variables using enhanced logic
+        const sampleSize = Math.min(1000, allRows.length);
+        const sampleRows = allRows.slice(0, sampleSize);
+        
+        const variables: DataVariable[] = headers.map(header => {
+          const values = sampleRows.map(row => row[header]);
+          return analyzeVariable(header, values);
+        });
+        
+        const previewRows = allRows.slice(0, 5);
+        
+        resolve({
+          variables,
+          previewRows,
+          totalRows: allRows.length
+        });
+      } catch (error) {
+        console.error('Error processing CSV:', error);
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
+// Simplified functions using the new cache system
+export const getDatasetVariables = () => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) return [];
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData) {
+      // Initialize cache with sample data if not already done
+      if (!isDatasetLoaded()) {
+        initializeSampleDataCache(sampleData);
+      }
+    }
+  }
+  
+  return getCachedVariables();
+};
+
+export const getDatasetPreviewRows = () => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) return [];
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData) {
+      // Initialize cache with sample data if not already done
+      if (!isDatasetLoaded()) {
+        initializeSampleDataCache(sampleData);
+      }
+    }
+  }
+  
+  return getCachedPreviewRows();
+};
+
+// Simplified function for pagination - single source of truth
+export const getFullDatasetRows = async (page: number = 0, rowsPerPage: number = 10): Promise<any[]> => {
+  const fileInfo = getCurrentFile();
+  if (!fileInfo) {
+    console.log('getFullDatasetRows: No file info found');
+    return [];
+  }
+  
+  console.log(`getFullDatasetRows: page ${page}, rowsPerPage ${rowsPerPage}`);
+  
+  // Check if using sample data
+  if (isSampleData() && fileInfo.id) {
+    const sampleData = getSampleDataset(fileInfo.id);
+    if (sampleData && !isDatasetLoaded()) {
+      console.log('Initializing sample data cache');
+      initializeSampleDataCache(sampleData);
+    }
+  }
+  
+  // Get all rows from cache, then slice for pagination
+  const allRows = getCachedAllRows();
+  const startIndex = page * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedRows = allRows.slice(startIndex, endIndex);
+  
+  console.log(`Returning ${paginatedRows.length} rows from cache (${startIndex}-${endIndex})`);
+  return paginatedRows;
+};
+
+// Save prepared variables data
+export const savePreparedVariables = (variables: DataVariable[]) => {
+  localStorage.setItem('preparedVariables', JSON.stringify(variables));
+};
+
+// Get prepared variables
+export const getPreparedVariables = () => {
+  const variablesData = localStorage.getItem('preparedVariables');
   if (!variablesData) return null;
   
   return JSON.parse(variablesData);
 };
 
-// Save prepared data rows with project isolation
+// Save prepared data rows
 export const savePreparedDataRows = (rows: any[]) => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
-  
-  const storageKey = `preparedDataRows_${projectId}`;
-  localStorage.setItem(storageKey, JSON.stringify(rows));
+  localStorage.setItem('preparedDataRows', JSON.stringify(rows));
 };
 
-// Get prepared data rows with project isolation
+// Get prepared data rows
 export const getPreparedDataRows = () => {
-  const currentProject = getCurrentProject();
-  const projectId = currentProject?.id || 'default';
-  
-  const storageKey = `preparedDataRows_${projectId}`;
-  const rowsData = localStorage.getItem(storageKey);
+  const rowsData = localStorage.getItem('preparedDataRows');
   if (!rowsData) return null;
   
   return JSON.parse(rowsData);
 };
 
-// Enhanced project isolation functions
-export const clearAllProjectData = (projectId?: string) => {
-  const targetProjectId = projectId || getCurrentProject()?.id;
-  
-  if (targetProjectId) {
-    console.log('Clearing all data for project:', targetProjectId);
-    
-    // Clear project-specific cache
-    clearProjectCache(targetProjectId);
-    
-    // Clear project-specific localStorage items
-    localStorage.removeItem(`reportItems_${targetProjectId}`);
-    localStorage.removeItem(`completedPrepSteps_${targetProjectId}`);
-    localStorage.removeItem(`preparedVariables_${targetProjectId}`);
-    localStorage.removeItem(`preparedDataRows_${targetProjectId}`);
-    localStorage.removeItem(`analysisResult_${targetProjectId}`);
-    
-    // Clear visualization state
-    localStorage.removeItem(`visualizationState_${targetProjectId}`);
-    localStorage.removeItem(`chartConfigs_${targetProjectId}`);
-  }
-  
-  // Also clear legacy global items to be safe
-  localStorage.removeItem('reportItems');
-  localStorage.removeItem('completedPrepSteps');
-  localStorage.removeItem('preparedVariables');
-  localStorage.removeItem('preparedDataRows');
-  localStorage.removeItem('analysisResult');
-  localStorage.removeItem('visualizationState');
-  localStorage.removeItem('chartConfigs');
-};
-
-// Export the datasetCache functions with proper names
-export const getDatasetVariables = getCachedVariables;
-export const getDatasetPreviewRows = getCachedPreviewRows;
-export const getFullDatasetRows = getCachedRows;
-export const getAllDatasetRows = getCachedAllRows;
-
-// Check if dataset has been modified
-export const hasDatasetBeenModified = (): boolean => {
-  const prepChanges = getPrepChanges();
-  return Object.keys(prepChanges).length > 0;
-};
-
-// Get current dataset state
+// Get the most recent dataset state (for visualization and analysis)
 export const getCurrentDatasetState = () => {
+  // Try to restore state from localStorage first
+  restoreDatasetState();
+  
+  const variables = getCachedVariables();
+  const previewRows = getCachedPreviewRows();
+  const completedSteps = getCompletedSteps();
+  const prepChanges = getPrepChanges();
+  
   return {
-    variables: getDatasetVariables(),
-    previewRows: getDatasetPreviewRows(),
-    allRows: getAllDatasetRows(),
-    metadata: getDatasetMetadata(),
-    prepChanges: getPrepChanges(),
-    isLoaded: isDatasetLoaded()
+    variables,
+    previewRows,
+    completedSteps,
+    prepChanges,
+    hasBeenPrepared: Object.keys(prepChanges).length > 0
   };
 };
 
-// Apply data preparation changes
-export const applyDataPrepChanges = (stepName: string, changes: any) => {
-  console.log(`Applying data prep changes for step: ${stepName}`, changes);
+// Ensure data consistency when navigating to visualization/analysis
+export const getDatasetForAnalysis = () => {
+  console.log('Getting dataset for analysis...');
   
-  // Get current dataset state
-  const currentVariables = getDatasetVariables();
-  const currentRows = getAllDatasetRows();
+  // Always use the current state from cache (which includes all prep changes)
+  const variables = getCachedVariables();
+  const allRows = getCachedAllRows();
+  const metadata = getDatasetMetadata();
+  const prepChanges = getPrepChanges();
   
-  // Apply the changes based on step type
-  let updatedVariables = [...currentVariables];
+  console.log('Dataset for analysis:', {
+    variables: variables.length,
+    rows: allRows.length,
+    prepChanges: Object.keys(prepChanges)
+  });
+  
+  return {
+    variables,
+    rows: allRows,
+    metadata,
+    prepChanges
+  };
+};
+
+// Check if dataset has been modified during preparation
+export const hasDatasetBeenModified = () => {
+  const completedSteps = getCompletedSteps();
+  return Object.values(completedSteps).some(step => step === true);
+};
+
+// Apply data preparation changes with improved flow
+export const applyDataPrepChanges = (stepType: string, changes: any) => {
+  console.log(`Applying data prep changes for ${stepType}:`, changes);
+  
+  // Get current state from cache
+  const currentVars = getCachedVariables();
+  const currentRows = getCachedAllRows();
+  
+  // Apply changes based on step type
+  let updatedVars = [...currentVars];
   let updatedRows = [...currentRows];
   
-  // Update the dataset cache with changes
-  updateDatasetCache(updatedRows, updatedVariables, stepName, changes);
-};
-
-// Process file data
-export const processFileData = async (file: File, sheetName?: string): Promise<any> => {
-  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-    const result = await parseExcelFile(file, sheetName);
-    return result;
-  } else {
-    // Handle CSV files
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const text = e.target?.result as string;
-          const lines = text.split('\n');
-          const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-          const rows = lines.slice(1)
-            .filter(line => line.trim())
-            .map(line => {
-              const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-              const row: any = {};
-              headers.forEach((header, index) => {
-                row[header] = values[index] || '';
-              });
-              return row;
-            });
+  switch (stepType) {
+    case 'missingValues':
+      // Handle missing values and invalid values for mixed numeric columns
+      updatedVars = updatedVars.map(v => {
+        let updatedVar = { ...v };
+        
+        // Handle mixed numeric columns with invalid values
+        if (v.type === 'numeric' && v.invalidValues && changes.invalidValueHandling) {
+          const handling = changes.invalidValueHandling[v.name];
+          console.log(`Handling invalid values for ${v.name} with strategy: ${handling}`);
           
-          const variables = headers.map(header => {
-            const values = rows.map(row => row[header]);
-            return analyzeVariable(header, values);
-          });
-          
-          resolve({
-            data: rows,
-            variables,
-            metadata: {
-              fileName: file.name,
-              totalRows: rows.length,
-              totalColumns: headers.length,
-              uploadedAt: new Date().toISOString()
+          if (handling === 'null') {
+            updatedVar = { 
+              ...v, 
+              missing: (v.missing || 0) + (v.invalidValues?.length || 0), 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          } else if (handling === 'zero') {
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          } else if (handling === 'mean') {
+            updatedVar = { 
+              ...v, 
+              invalidValues: undefined,
+              numericPercentage: undefined 
+            };
+          }
+        }
+        
+        // Handle regular missing values
+        if (changes.missingValueHandling && changes.missingValueHandling[v.name]) {
+          const missingHandling = changes.missingValueHandling[v.name];
+          if (missingHandling !== 'ignore') {
+            updatedVar = { ...updatedVar, missing: 0, missingHandling };
+          }
+        }
+        
+        return updatedVar;
+      });
+      
+      // Update row data to reflect the changes
+      updatedRows = updatedRows.map(row => {
+        const newRow = { ...row };
+        
+        // Apply invalid value handling to rows
+        if (changes.invalidValueHandling) {
+          Object.entries(changes.invalidValueHandling).forEach(([colName, handling]) => {
+            const variable = currentVars.find(v => v.name === colName);
+            if (variable && variable.invalidValues && newRow[colName]) {
+              const isInvalid = variable.invalidValues.includes(String(newRow[colName]));
+              if (isInvalid) {
+                if (handling === 'null') {
+                  newRow[colName] = null;
+                } else if (handling === 'zero') {
+                  newRow[colName] = 0;
+                } else if (handling === 'mean') {
+                  newRow[colName] = 5; // Simplified for demo
+                }
+              }
             }
           });
-        } catch (error) {
-          reject(error);
         }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
+        
+        return newRow;
+      });
+      break;
+      
+    case 'standardizeVariables':
+      console.log('Applying variable standardization:', changes);
+      if (changes.standardizedNames) {
+        // First update variables
+        changes.standardizedNames.forEach((change: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === change.oldName);
+          if (varIndex >= 0) {
+            console.log(`Updating variable name from "${change.oldName}" to "${change.newName}"`);
+            updatedVars[varIndex] = {
+              ...updatedVars[varIndex],
+              name: change.newName
+            };
+          }
+        });
+        
+        // Then update row data keys to match new variable names
+        updatedRows = updatedRows.map(row => {
+          let newRow = { ...row };
+          changes.standardizedNames.forEach((change: any) => {
+            if (newRow.hasOwnProperty(change.oldName)) {
+              newRow[change.newName] = newRow[change.oldName];
+              delete newRow[change.oldName];
+            }
+          });
+          return newRow;
+        });
+        
+        // Also handle categorical values standardization
+        if (changes.standardizedValues) {
+          Object.entries(changes.standardizedValues).forEach(([varName, valueChanges]: [string, any]) => {
+            const variable = updatedVars.find(v => v.name === varName);
+            if (variable && variable.type === 'categorical') {
+              // Update variable coding
+              const newCoding: {[key: string]: number} = {};
+              Object.entries(valueChanges).forEach(([oldValue, newValue]: [string, any], index) => {
+                newCoding[newValue] = index;
+              });
+              variable.coding = newCoding;
+              variable.originalCategories = Object.keys(newCoding);
+              
+              // Update row data
+              updatedRows = updatedRows.map(row => {
+                if (row[varName] && valueChanges[row[varName]]) {
+                  return { ...row, [varName]: valueChanges[row[varName]] };
+                }
+                return row;
+              });
+            }
+          });
+        }
+      }
+      break;
+      
+    case 'recodeVariables':
+      if (changes.recodedVariables) {
+        changes.recodedVariables.forEach((recode: any) => {
+          const varIndex = updatedVars.findIndex(v => v.name === recode.originalName);
+          if (varIndex >= 0) {
+            const originalVar = updatedVars[varIndex];
+            updatedVars[varIndex] = {
+              ...originalVar,
+              name: recode.newName || recode.originalName,
+              type: recode.newType || originalVar.type,
+              coding: recode.newCoding || originalVar.coding,
+              originalCategories: originalVar.originalCategories || originalVar.coding ? Object.keys(originalVar.coding) : undefined
+            };
+          }
+        });
+      }
+      break;
+      
+    case 'removeColumns':
+      if (changes.removedColumns) {
+        updatedVars = updatedVars.filter(v => !changes.removedColumns.includes(v.name));
+        updatedRows = updatedRows.map(row => {
+          const newRow = { ...row };
+          changes.removedColumns.forEach((col: string) => {
+            delete newRow[col];
+          });
+          return newRow;
+        });
+      }
+      break;
+      
+    case 'compositeScores':
+      if (changes.compositeVariables) {
+        // Add new composite variables
+        changes.compositeVariables.forEach((composite: any) => {
+          updatedVars.push({
+            name: composite.name,
+            type: 'numeric',
+            missing: 0,
+            unique: composite.uniqueValues || 10,
+            example: composite.exampleValue || '5.0'
+          });
+          
+          // Add composite scores to rows (simplified calculation)
+          updatedRows = updatedRows.map(row => ({
+            ...row,
+            [composite.name]: composite.exampleValue || Math.round(Math.random() * 10)
+          }));
+        });
+      }
+      break;
+      
+    case 'fixDuplicates':
+      console.log('Applying duplicate removal changes:', changes);
+      
+      if (changes.duplicatesRemoved > 0) {
+        // Create a map to track unique rows
+        const uniqueRowsMap = new Map<string, any>();
+        const duplicateRowIndexes = new Set<number>();
+        
+        // Identify duplicates by creating row signatures
+        updatedRows.forEach((row, index) => {
+          // Create a string representation of the row (excluding null/undefined values)
+          const rowKey = Object.keys(row)
+            .sort()
+            .map(key => `${key}:${row[key] || ''}`)
+            .join('|');
+          
+          if (uniqueRowsMap.has(rowKey)) {
+            // This is a duplicate, mark for removal
+            duplicateRowIndexes.add(index);
+            console.log(`Marking duplicate row ${index} for removal`);
+          } else {
+            // First occurrence, keep it
+            uniqueRowsMap.set(rowKey, row);
+          }
+        });
+        
+        // Remove duplicate rows
+        updatedRows = updatedRows.filter((_, index) => !duplicateRowIndexes.has(index));
+        
+        console.log(`Removed ${duplicateRowIndexes.size} duplicate rows. Remaining: ${updatedRows.length}`);
+      }
+      
+      // Handle inconsistent values standardization
+      if (changes.inconsistentValuesFixed && changes.standardizedValues) {
+        Object.entries(changes.standardizedValues).forEach(([varName, valueMapping]: [string, any]) => {
+          console.log(`Standardizing values for variable ${varName}:`, valueMapping);
+          
+          updatedRows = updatedRows.map(row => {
+            if (row[varName] && valueMapping[row[varName]]) {
+              return { ...row, [varName]: valueMapping[row[varName]] };
+            }
+            return row;
+          });
+          
+          // Update variable metadata if it's categorical
+          const variable = updatedVars.find(v => v.name === varName);
+          if (variable && variable.type === 'categorical' && variable.coding) {
+            const newCoding: {[key: string]: number} = {};
+            const standardizedCategories = [...new Set(Object.values(valueMapping))];
+            standardizedCategories.forEach((category, index) => {
+              newCoding[String(category)] = index;
+            });
+            variable.coding = newCoding;
+            variable.originalCategories = standardizedCategories.map(c => String(c));
+          }
+        });
+      }
+      break;
+      
+    default:
+      console.warn(`Unknown step type: ${stepType}`);
+      break;
   }
+  
+  console.log('Updated variables after data prep:', updatedVars.map(v => ({ 
+    name: v.name, 
+    type: v.type, 
+    missing: v.missing, 
+    invalidValues: v.invalidValues 
+  })));
+  
+  // Update the cache with the new state
+  updateDatasetCache(updatedRows, updatedVars, stepType, changes);
+  
+  // Also save to localStorage for persistence
+  savePreparedVariables(updatedVars);
+  savePreparedDataRows(updatedRows);
+  
+  return { variables: updatedVars, previewRows: updatedRows.slice(0, 5) };
 };
-
-// Re-export cache functions with proper aliases
-export const restoreDatasetState = restoreDatasetStateFromCache;
-export const initializeSampleDataCache = initSampleDataCache;

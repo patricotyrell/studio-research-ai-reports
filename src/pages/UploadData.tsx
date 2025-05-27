@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileText, AlertCircle } from 'lucide-react';
-import { processFileData, createProject, clearAllProjectData } from '@/utils/dataUtils';
+import { processFileData, createProject } from '@/utils/dataUtils';
 import { getExcelSheetInfo } from '@/utils/excelUtils';
 
 interface SheetInfo {
@@ -186,10 +186,7 @@ const UploadData = () => {
       columns: processedData.variables.length
     };
     
-    // Clear any existing project data before creating new project
-    clearAllProjectData();
-    
-    // Create and save the project with complete isolation
+    // Create and save the project (only essential data)
     try {
       createProject(projectName, fileInfo, {
         variables: processedData.variables,

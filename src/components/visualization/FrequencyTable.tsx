@@ -32,32 +32,6 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
   const totalFrequency = data.reduce((sum, item) => sum + item.frequency, 0);
 
   const handleAddToReport = () => {
-    // Get current project ID for isolation
-    const getCurrentProjectId = () => {
-      try {
-        const currentProject = localStorage.getItem('currentProject');
-        const currentFile = localStorage.getItem('currentFile');
-        
-        if (currentProject) {
-          const project = JSON.parse(currentProject);
-          return project.id;
-        }
-        
-        if (currentFile) {
-          const file = JSON.parse(currentFile);
-          return file.projectId || file.name;
-        }
-        
-        return 'default';
-      } catch (e) {
-        console.warn('Error getting current project ID:', e);
-        return 'default';
-      }
-    };
-
-    const projectId = getCurrentProjectId();
-    const reportStorageKey = `reportItems_${projectId}`;
-    
     const reportItem = {
       id: `freq-table-${Date.now()}`,
       type: 'table',
@@ -69,12 +43,11 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
       },
       caption: `Frequency distribution showing the count and percentage for each category of ${variableName}`,
       addedAt: new Date().toISOString(),
-      source: 'visualization',
-      projectId: projectId
+      source: 'visualization'
     };
     
-    // Load existing report items for this project
-    const existingItems = localStorage.getItem(reportStorageKey);
+    // Load existing report items and add this one
+    const existingItems = localStorage.getItem('reportItems');
     let reportItems = [];
     if (existingItems) {
       try {
@@ -85,9 +58,9 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({
     }
     
     reportItems.push(reportItem);
-    localStorage.setItem(reportStorageKey, JSON.stringify(reportItems));
+    localStorage.setItem('reportItems', JSON.stringify(reportItems));
     
-    // Also save to legacy storage for backward compatibility
+    // Also call the parent's onAddToReport if provided
     if (onAddToReport) {
       onAddToReport();
     }

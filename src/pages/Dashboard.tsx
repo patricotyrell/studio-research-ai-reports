@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectNameDialog from '@/components/ProjectNameDialog';
 import { FileText, Upload, Database, Edit, Trash2, Calendar, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
-import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects, isDemoMode, clearDemoMode, switchToProject, deleteProject } from '@/utils/dataUtils';
+import { getCurrentProject, updateProjectName, getCurrentFile, getPastProjects, isDemoMode, clearDemoMode } from '@/utils/dataUtils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -61,22 +61,27 @@ const Dashboard = () => {
   };
 
   const handleLoadProject = (project: any) => {
-    // Use the new switchToProject function for complete isolation
-    switchToProject(project);
+    // Load the selected project as current project
+    localStorage.setItem('currentProject', JSON.stringify(project));
+    if (project.fileData) {
+      localStorage.setItem('currentFile', JSON.stringify(project.fileData));
+      localStorage.setItem('processedData', JSON.stringify(project.processedData || {}));
+      localStorage.setItem('isSampleData', project.fileData.id ? 'true' : 'false');
+    }
     setCurrentProject(project);
     navigate('/data-overview');
   };
 
   const handleDeleteProject = (projectId: string) => {
-    // Use the enhanced deleteProject function
-    deleteProject(projectId);
-    
-    // Update local state
     const updatedProjects = pastProjects.filter(p => p.id !== projectId);
     setPastProjects(updatedProjects);
+    localStorage.setItem('pastProjects', JSON.stringify(updatedProjects));
     
-    // Clear current project if it was deleted
+    // If the deleted project is the current project, clear it
     if (currentProject && currentProject.id === projectId) {
+      localStorage.removeItem('currentProject');
+      localStorage.removeItem('currentFile');
+      localStorage.removeItem('processedData');
       setCurrentProject(null);
     }
   };
