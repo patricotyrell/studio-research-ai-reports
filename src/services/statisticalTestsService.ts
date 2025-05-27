@@ -1,7 +1,12 @@
-
 import * as ss from 'simple-statistics';
 import { getAllDatasetRows, getDatasetVariables } from '@/utils/datasetCache';
 import { DataVariable } from './sampleDataService';
+
+export interface AssumptionCheck {
+  passed: boolean;
+  pValue: number;
+  testName: string;
+}
 
 export interface StatisticalTestResult {
   type: string;
@@ -21,15 +26,15 @@ export interface StatisticalTestResult {
     sampleSize?: number;
   };
   assumptions?: {
-    normality?: { passed: boolean; pValue: number };
-    homogeneity?: { passed: boolean; pValue: number };
+    normality?: AssumptionCheck;
+    homogeneity?: AssumptionCheck;
     recommendations?: string[];
   };
 }
 
 export interface AssumptionCheckResult {
-  normality?: { passed: boolean; pValue: number; testName: string };
-  homogeneity?: { passed: boolean; pValue: number; testName: string };
+  normality?: AssumptionCheck;
+  homogeneity?: AssumptionCheck;
   recommendations: string[];
 }
 
@@ -82,7 +87,7 @@ const getGroupedNumericData = (categoricalVar: string, numericVar: string): Reco
 /**
  * Basic normality test using Shapiro-Wilk approximation
  */
-const testNormality = (data: number[]): { passed: boolean; pValue: number; testName: string } => {
+const testNormality = (data: number[]): AssumptionCheck => {
   if (data.length < 3) {
     return { passed: false, pValue: 0, testName: 'Shapiro-Wilk (insufficient data)' };
   }
@@ -106,7 +111,7 @@ const testNormality = (data: number[]): { passed: boolean; pValue: number; testN
 /**
  * Test homogeneity of variance using Levene's test approximation
  */
-const testHomogeneity = (groups: number[][]): { passed: boolean; pValue: number; testName: string } => {
+const testHomogeneity = (groups: number[][]): AssumptionCheck => {
   if (groups.length < 2 || groups.some(g => g.length < 2)) {
     return { passed: false, pValue: 0, testName: 'Levene Test (insufficient data)' };
   }
